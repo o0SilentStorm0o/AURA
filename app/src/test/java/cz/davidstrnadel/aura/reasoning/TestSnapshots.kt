@@ -56,7 +56,11 @@ object TestSnapshots {
 
     fun defaultRawFeatures(sourceDir: String = "/data/app/fixture/base.apk"): Map<String, String> = mapOf(
         "sourcePartition" to if (sourceDir.startsWith("/data/app")) "data_app" else "system_priv_app",
+        "usageStatsObservability" to ObservabilityState.USER_GRANT_REQUIRED.name,
+        "usageStatsLookbackMillis" to "600000",
         "foregroundSensitiveAppRecentlyObserved" to "false",
+        "foregroundSensitiveAppPackage" to "",
+        "foregroundSensitiveAppAgeMillis" to "",
         "allowBackup" to "false",
         "debuggable" to "false",
         "usesCleartextTraffic" to "false",

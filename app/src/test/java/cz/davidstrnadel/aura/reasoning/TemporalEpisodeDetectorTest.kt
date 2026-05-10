@@ -95,6 +95,51 @@ class TemporalEpisodeDetectorTest {
     }
 
     @Test
+    fun detectsOverlayNearSensitiveForegroundSignal() {
+        val current = TestSnapshots.app(
+            packageName = "com.example.side",
+            installerPackageName = null,
+            specialAccess = TestSnapshots.defaultSpecialAccess() + (
+                "overlay" to ObservabilityState.OBSERVED_ENABLED
+                ),
+            rawFeatures = TestSnapshots.defaultRawFeatures() + mapOf(
+                "foregroundSensitiveAppRecentlyObserved" to "true",
+                "foregroundSensitiveAppPackage" to "com.example.sensitivebank",
+                "foregroundSensitiveAppAgeMillis" to (5 * 60 * 1000L).toString()
+            )
+        )
+
+        val episodes = detector.detect(previous = null, current = current)
+
+        assertEquals(
+            listOf(
+                TemporalEpisodeType.SPECIAL_ACCESS_PLUS_SENSITIVE_APP
+            ),
+            episodes.map { it.type }
+        )
+    }
+
+    @Test
+    fun ignoresOverlayWhenSensitiveForegroundSignalIsOutsideWindow() {
+        val current = TestSnapshots.app(
+            packageName = "com.example.side",
+            installerPackageName = null,
+            specialAccess = TestSnapshots.defaultSpecialAccess() + (
+                "overlay" to ObservabilityState.OBSERVED_ENABLED
+                ),
+            rawFeatures = TestSnapshots.defaultRawFeatures() + mapOf(
+                "foregroundSensitiveAppRecentlyObserved" to "true",
+                "foregroundSensitiveAppPackage" to "com.example.sensitivebank",
+                "foregroundSensitiveAppAgeMillis" to (11 * 60 * 1000L).toString()
+            )
+        )
+
+        val episodes = detector.detect(previous = null, current = current)
+
+        assertEquals(0, episodes.size)
+    }
+
+    @Test
     fun ignoresAccessibilityEnableOutsideThirtyMinutes() {
         val previous = TestSnapshots.app(
             packageName = "com.example.side",

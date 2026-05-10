@@ -7,22 +7,25 @@ python3 tools/scenario_runner/run_emulator_scenarios.py
 ```
 
 The runner uses a booted emulator via `adb`, builds AURA plus fixture APKs,
-installs them, toggles special-access state for the suspicious fixture, launches
-AURA, pulls `files/exports/aura-last-scan.json`, runs the Python evaluator, and
-asserts the expected decisions.
+installs them, toggles special-access state for the suspicious fixture, grants
+AURA UsageStats only for the second-phase lab scan, launches AURA, pulls
+`files/exports/aura-last-scan.json`, runs the Python evaluator, and asserts the
+expected decisions.
 
 For repeatability, the runner uses `adb shell settings`, `adb shell appops`, and
 `adb shell cmd notification allow_listener` to simulate user-enabled special
-access in the lab. It also restores Accessibility, notification-listener, and
-overlay state in a `finally` block so one run does not contaminate the next.
+access in the lab. It also restores Accessibility, notification-listener,
+overlay, and AURA UsageStats app-op state in a `finally` block so one run does
+not contaminate the next.
 
 The suspicious scenario is intentionally two-phase:
 
 1. Launch AURA once with the fixture installed but special access disabled.
    This seeds AURA's private previous-snapshot state.
-2. Enable Accessibility, notification listener, and overlay through adb, launch
-   AURA again without clearing app data, then assert both the final decision and
-   the temporal episodes derived from the snapshot diff.
+2. Enable Accessibility, notification listener, overlay, and UsageStats through
+   adb, foreground the sensitive bank fixture, launch AURA again without
+   clearing app data, then assert both the final decision and the temporal
+   episodes derived from the snapshot diff.
 
 ## Fixture Apps
 
@@ -60,10 +63,14 @@ It must also produce temporal episodes:
 
 - `SIDELOAD_TO_ACCESSIBILITY`
 - `SIDELOAD_TO_NOTIFICATION_LISTENER`
+- `SPECIAL_ACCESS_PLUS_SENSITIVE_APP`
 
 The runner fails if the decision is correct but these evidence states are not
 actually present in the exported snapshot, or if the temporal episodes are
-missing from the second-phase export.
+missing from the second-phase export. For the sensitive-foreground episode it
+also asserts `usageStatsObservability = OBSERVED_ENABLED`,
+`foregroundSensitiveAppRecentlyObserved = true`, and
+`foregroundSensitiveAppPackage = com.example.sensitivebank`.
 
 The leaky bank fixture must produce defensive surface findings:
 

@@ -66,6 +66,7 @@ EXPECTATIONS = [
         expected_temporal_episodes=[
             "SIDELOAD_TO_ACCESSIBILITY",
             "SIDELOAD_TO_NOTIFICATION_LISTENER",
+            "SPECIAL_ACCESS_PLUS_SENSITIVE_APP",
         ],
     ),
     ScenarioExpectation(
@@ -260,6 +261,45 @@ def restore_special_access(restore_state: dict[str, str] | None) -> None:
     adb("shell", "appops", "set", "com.flashlight.cleaner.update", "SYSTEM_ALERT_WINDOW", "deny", check=False)
 
 
+def current_usage_stats_mode() -> str:
+    result = adb(
+        "shell",
+        "appops",
+        "get",
+        AURA_PACKAGE,
+        "GET_USAGE_STATS",
+        check=False,
+        capture=True,
+    )
+    output = result.stdout.strip()
+    for mode in ["allow", "foreground", "ignore", "deny", "default"]:
+        if f"GET_USAGE_STATS: {mode}" in output:
+            return mode
+    return "default"
+
+
+def set_usage_stats_mode(mode: str) -> None:
+    adb("shell", "appops", "set", AURA_PACKAGE, "GET_USAGE_STATS", mode, check=False)
+
+
+def restore_usage_stats_mode(mode: str | None) -> None:
+    if mode:
+        set_usage_stats_mode(mode)
+
+
+def launch_sensitive_app() -> None:
+    adb(
+        "shell",
+        "monkey",
+        "-p",
+        "com.example.sensitivebank",
+        "-c",
+        "android.intent.category.LAUNCHER",
+        "1",
+    )
+    time.sleep(2)
+
+
 def run_aura_and_pull_export(output_name: str, *, clear_data: bool) -> Path:
     if clear_data:
         adb("shell", "pm", "clear", AURA_PACKAGE)
@@ -401,6 +441,24 @@ def assert_expectations(export_path: Path) -> None:
                         f"{expectation.package_name}: missing temporal episode {expected_type}; "
                         f"observed {sorted(actual_temporal)}"
                     )
+            if expectation.package_name == "com.flashlight.cleaner.update":
+                raw_features = assessment["snapshot"].get("rawFeatures", {})
+                if raw_features.get("usageStatsObservability") != "OBSERVED_ENABLED":
+                    failures.append(
+                        f"{expectation.package_name}: expected UsageStats OBSERVED_ENABLED, "
+                        f"got {raw_features.get('usageStatsObservability')}"
+                    )
+                if raw_features.get("foregroundSensitiveAppRecentlyObserved") != "true":
+                    failures.append(
+                        f"{expectation.package_name}: expected foreground sensitive signal, "
+                        f"got {raw_features.get('foregroundSensitiveAppRecentlyObserved')}"
+                    )
+                if raw_features.get("foregroundSensitiveAppPackage") != "com.example.sensitivebank":
+                    failures.append(
+                        f"{expectation.package_name}: expected sensitive foreground package "
+                        "com.example.sensitivebank, got "
+                        f"{raw_features.get('foregroundSensitiveAppPackage')}"
+                    )
         if expectation.expected_defensive_findings:
             actual_defensive = {
                 finding["findingType"]
@@ -433,14 +491,19 @@ def capture_logcat() -> None:
 
 def main() -> int:
     restore_state: dict[str, str] | None = None
+    original_usage_stats_mode: str | None = None
     build_all()
     ensure_device()
     install_apps()
     try:
+        original_usage_stats_mode = current_usage_stats_mode()
+        set_usage_stats_mode("ignore")
         remove_lab_special_access()
         baseline_export_path = run_aura_and_pull_export("aura-baseline-scan.json", clear_data=True)
         print(f"Baseline AURA export: {baseline_export_path}")
         restore_state = configure_special_access()
+        set_usage_stats_mode("allow")
+        launch_sensitive_app()
         export_path = run_aura_and_pull_export("aura-last-scan.json", clear_data=False)
         evaluation_path = evaluate(export_path)
         assert_expectations(export_path)
@@ -451,6 +514,7 @@ def main() -> int:
         return 0
     finally:
         restore_special_access(restore_state)
+        restore_usage_stats_mode(original_usage_stats_mode)
 
 
 if __name__ == "__main__":

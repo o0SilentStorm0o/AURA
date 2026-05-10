@@ -61,7 +61,7 @@ class TemporalEpisodeDetector {
         }
 
         if (current.specialAccess["overlay"] == ObservabilityState.OBSERVED_ENABLED &&
-            current.rawFeatures["foregroundSensitiveAppRecentlyObserved"] == "true"
+            current.hasRecentSensitiveForegroundSignal()
         ) {
             add(
                 TemporalEpisodeType.SPECIAL_ACCESS_PLUS_SENSITIVE_APP,
@@ -89,5 +89,11 @@ class TemporalEpisodeDetector {
         const val SIDELOAD_TO_NOTIFICATION_LISTENER_TTL: Long = 30 * 60 * 1000L
         const val SPECIAL_ACCESS_PLUS_SENSITIVE_APP_TTL: Long = 10 * 60 * 1000L
         const val BOOT_PERSISTENCE_AFTER_SIDELOAD_TTL: Long = 24 * 60 * 60 * 1000L
+    }
+
+    private fun ObservedAppSnapshot.hasRecentSensitiveForegroundSignal(): Boolean {
+        if (rawFeatures["foregroundSensitiveAppRecentlyObserved"] != "true") return false
+        val ageMillis = rawFeatures["foregroundSensitiveAppAgeMillis"]?.toLongOrNull()
+        return ageMillis == null || ageMillis in 0..SPECIAL_ACCESS_PLUS_SENSITIVE_APP_TTL
     }
 }

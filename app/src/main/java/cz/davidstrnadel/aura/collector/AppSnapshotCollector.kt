@@ -1,12 +1,15 @@
 package cz.davidstrnadel.aura.collector
 
 import android.app.AppOpsManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Process
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import cz.davidstrnadel.aura.BuildConfig
@@ -26,15 +29,18 @@ class AppSnapshotCollector(private val context: Context) {
         val enabledNotificationListenerPackages = runCatching {
             NotificationManagerCompat.getEnabledListenerPackages(context)
         }.getOrDefault(emptySet())
+        val packageInfos = installedPackages()
+        val foregroundSensitiveSignal = foregroundSensitiveSignal(collectedAt, packageInfos)
 
-        return installedPackages().mapNotNull { packageInfo ->
+        return packageInfos.mapNotNull { packageInfo ->
             runCatching {
                 packageInfo.toSnapshot(
                     scanId = scanId,
                     collectedAt = collectedAt,
                     enabledAccessibility = enabledAccessibility,
                     enabledNotificationListeners = enabledNotificationListeners,
-                    enabledNotificationListenerPackages = enabledNotificationListenerPackages
+                    enabledNotificationListenerPackages = enabledNotificationListenerPackages,
+                    foregroundSensitiveSignal = foregroundSensitiveSignal
                 )
             }.getOrNull()
         }.sortedBy { it.packageName }
@@ -45,7 +51,8 @@ class AppSnapshotCollector(private val context: Context) {
         collectedAt: Long,
         enabledAccessibility: String,
         enabledNotificationListeners: String,
-        enabledNotificationListenerPackages: Set<String>
+        enabledNotificationListenerPackages: Set<String>,
+        foregroundSensitiveSignal: ForegroundSensitiveSignal
     ): ObservedAppSnapshot {
         val appInfo = applicationInfo
         val requested = requestedPermissions?.toList().orEmpty().sorted()
@@ -100,7 +107,8 @@ class AppSnapshotCollector(private val context: Context) {
                 "capabilityFlavor" to BuildConfig.AURA_CAPABILITY_FLAVOR,
                 "fullInventory" to BuildConfig.AURA_FULL_INVENTORY.toString(),
                 "sourcePartition" to sourcePartition(sourceDir),
-                "usageStatsObservability" to ObservabilityState.USER_GRANT_REQUIRED.name,
+                "usageStatsObservability" to foregroundSensitiveSignal.observabilityState.name,
+                "usageStatsLookbackMillis" to USAGE_STATS_LOOKBACK_MILLIS.toString(),
                 "requestedPermissionCount" to requested.size.toString(),
                 "grantedPermissionCount" to granted.size.toString(),
                 "componentCount" to components.size.toString(),
@@ -111,7 +119,9 @@ class AppSnapshotCollector(private val context: Context) {
                 "usesCleartextTraffic" to appFlags.and(ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC).let { (it != 0).toString() },
                 "networkSecurityConfigObservability" to ObservabilityState.DECLARED_ONLY.name,
                 "hasBootPersistence" to requested.any { it.endsWith("RECEIVE_BOOT_COMPLETED") }.toString(),
-                "foregroundSensitiveAppRecentlyObserved" to "false"
+                "foregroundSensitiveAppRecentlyObserved" to (foregroundSensitiveSignal.packageName != null).toString(),
+                "foregroundSensitiveAppPackage" to foregroundSensitiveSignal.packageName.orEmpty(),
+                "foregroundSensitiveAppAgeMillis" to foregroundSensitiveSignal.ageMillis?.toString().orEmpty()
             )
         )
     }
@@ -267,6 +277,94 @@ class AppSnapshotCollector(private val context: Context) {
     private fun secureSetting(name: String): String =
         runCatching { Settings.Secure.getString(context.contentResolver, name).orEmpty() }.getOrDefault("")
 
+    private fun foregroundSensitiveSignal(
+        collectedAt: Long,
+        packageInfos: List<PackageInfo>
+    ): ForegroundSensitiveSignal {
+        val observability = usageStatsObservability()
+        if (observability != ObservabilityState.OBSERVED_ENABLED) {
+            return ForegroundSensitiveSignal(observability)
+        }
+
+        val sensitivePackages = packageInfos
+            .filter { it.looksSensitive() }
+            .map { it.packageName }
+            .toSet()
+        if (sensitivePackages.isEmpty()) {
+            return ForegroundSensitiveSignal(ObservabilityState.OBSERVED_ENABLED)
+        }
+
+        return runCatching {
+            val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val events = usageStats.queryEvents(collectedAt - USAGE_STATS_LOOKBACK_MILLIS, collectedAt)
+            val event = UsageEvents.Event()
+            var latestPackage: String? = null
+            var latestTimestamp = 0L
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (event.packageName in sensitivePackages &&
+                    event.isForegroundEvent() &&
+                    event.timeStamp >= latestTimestamp
+                ) {
+                    latestPackage = event.packageName
+                    latestTimestamp = event.timeStamp
+                }
+            }
+
+            ForegroundSensitiveSignal(
+                observabilityState = ObservabilityState.OBSERVED_ENABLED,
+                packageName = latestPackage,
+                ageMillis = latestPackage?.let { collectedAt - latestTimestamp }
+            )
+        }.getOrElse {
+            ForegroundSensitiveSignal(ObservabilityState.UNKNOWN_API_LIMITATION)
+        }
+    }
+
+    private fun PackageInfo.looksSensitive(): Boolean {
+        val packageName = this.packageName.lowercase()
+        val label = applicationInfo?.loadLabel(packageManager)?.toString().orEmpty().lowercase()
+        return SENSITIVE_FOREGROUND_MARKERS.any { marker ->
+            marker in packageName || marker in label
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun UsageEvents.Event.isForegroundEvent(): Boolean =
+        eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+            (Build.VERSION.SDK_INT >= 29 && eventType == UsageEvents.Event.ACTIVITY_RESUMED)
+
+    private fun usageStatsObservability(): ObservabilityState {
+        if (!BuildConfig.AURA_FULL_INVENTORY) {
+            return ObservabilityState.REQUIRES_RESEARCH_FLAVOR
+        }
+        return runCatching {
+            val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+            val mode = if (Build.VERSION.SDK_INT >= 29) {
+                appOps.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    context.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                appOps.checkOpNoThrow(
+                    AppOpsManager.OPSTR_GET_USAGE_STATS,
+                    Process.myUid(),
+                    context.packageName
+                )
+            }
+            if (mode == AppOpsManager.MODE_ALLOWED) {
+                ObservabilityState.OBSERVED_ENABLED
+            } else {
+                ObservabilityState.USER_GRANT_REQUIRED
+            }
+        }.getOrElse {
+            ObservabilityState.UNKNOWN_API_LIMITATION
+        }
+    }
+
     private fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
         return digest.joinToString("") { "%02x".format(it) }
@@ -291,5 +389,21 @@ class AppSnapshotCollector(private val context: Context) {
 
     companion object {
         private const val FLAG_PRIVILEGED_COMPAT = 1 shl 30
+        private const val USAGE_STATS_LOOKBACK_MILLIS = 10 * 60 * 1000L
+        private val SENSITIVE_FOREGROUND_MARKERS = setOf(
+            "bank",
+            "pay",
+            "wallet",
+            "password",
+            "authenticator",
+            "health",
+            "eid"
+        )
     }
+
+    private data class ForegroundSensitiveSignal(
+        val observabilityState: ObservabilityState,
+        val packageName: String? = null,
+        val ageMillis: Long? = null
+    )
 }
