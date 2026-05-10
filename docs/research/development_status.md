@@ -30,6 +30,9 @@ This document separates what exists in the current Research MVP from planned wor
 - Expert-label validation tooling, firmware APK inventory tooling, and explicit
   integration-boundary docs for Binary Transparency, enterprise Device Owner,
   and lab Accessibility observer work.
+- Expert review packet generator that converts an AURA export into reviewer CSV
+  plus an `UNLABELED` labels template that is skipped by the evaluator until
+  explicitly reviewed.
 - Research-console UI with decision counts, scan-history summary, selectable app
   detail, risk-vector bars, actionability/provenance/role fields, first-class
   evidence items, evidence graph summary, recommended actions, and per-app
@@ -38,7 +41,8 @@ This document separates what exists in the current Research MVP from planned wor
 ## Not Yet Implemented
 
 - Interactive evidence graph visualization beyond the current typed node/edge summary.
-- Full expert review workflow beyond schema validation and controlled-scenario labels.
+- Multi-reviewer adjudication workflow beyond generated packets, schema
+  validation, and controlled-scenario labels.
 - Firmware-scale OEM/preinstall analysis beyond safe APK inventory collection.
 - Binary Transparency verification.
 - Enterprise/Device Owner mode; only boundary docs and flavor placeholder exist.

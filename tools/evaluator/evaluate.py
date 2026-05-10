@@ -122,6 +122,7 @@ def load_labels(path: Path | None) -> dict[str, ScenarioLabel]:
             expected_defensive_findings=tuple(item.get("expectedDefensiveFindings", [])),
         )
         for item in payload.get("labels", [])
+        if item.get("reviewStatus") != "UNLABELED"
     }
 
 

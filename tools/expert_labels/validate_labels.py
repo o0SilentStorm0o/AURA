@@ -14,6 +14,7 @@ from typing import Any
 
 
 DECISIONS = {"GREEN", "YELLOW", "RED", "BLUE", "GRAY"}
+REVIEW_STATUSES = {"UNLABELED", "REVIEWED", "NEEDS_DISCUSSION"}
 DEFENSIVE_FINDINGS = {
     "DEBUGGABLE_SENSITIVE_APP",
     "BACKUP_ALLOWED_SENSITIVE_APP",
@@ -51,6 +52,9 @@ def validate(payload: dict[str, Any]) -> list[str]:
         expected_decision = item.get("expectedDecision")
         if expected_decision is not None and expected_decision not in DECISIONS:
             errors.append(f"labels[{index}].expectedDecision must be one of {sorted(DECISIONS)}")
+        review_status = item.get("reviewStatus")
+        if review_status is not None and review_status not in REVIEW_STATUSES:
+            errors.append(f"labels[{index}].reviewStatus must be one of {sorted(REVIEW_STATUSES)}")
 
         for key in ("controlledAbuse", "userActionable", "platformAudit", "abstentionExpected"):
             _require_bool(item, key, errors, index)

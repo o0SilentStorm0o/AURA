@@ -3,6 +3,8 @@
   "labels": [
     {
       "packageName": "com.example.app",
+      "reviewStatus": "REVIEWED",
+      "observedDecision": "RED",
       "expectedDecision": "RED",
       "controlledAbuse": true,
       "userActionable": true,

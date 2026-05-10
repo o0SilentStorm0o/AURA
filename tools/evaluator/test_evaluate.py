@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import unittest
 import sys
+import tempfile
 from pathlib import Path
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from evaluate import ScenarioLabel, evaluate
+from evaluate import ScenarioLabel, evaluate, load_labels
 
 
 def assessment(
@@ -56,6 +57,23 @@ def assessment(
 
 
 class EvaluatorMetricsTest(unittest.TestCase):
+    def test_load_labels_skips_unlabeled_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "labels.json"
+            path.write_text(
+                """{
+                  "schemaVersion": 1,
+                  "labels": [
+                    {"packageName": "com.example.unlabeled", "reviewStatus": "UNLABELED"},
+                    {"packageName": "com.example.reviewed", "reviewStatus": "REVIEWED", "expectedDecision": "RED"}
+                  ]
+                }"""
+            )
+
+            labels = load_labels(path)
+
+        self.assertEqual({"com.example.reviewed"}, set(labels))
+
     def test_model_metrics_show_aura_false_positive_reduction(self) -> None:
         export = {
             "scanId": "unit-scan",

@@ -18,6 +18,7 @@ class ExpertLabelValidatorTest(unittest.TestCase):
                 "labels": [
                     {
                         "packageName": "com.example.app",
+                        "reviewStatus": "REVIEWED",
                         "expectedDecision": "GRAY",
                         "controlledAbuse": False,
                         "userActionable": False,
@@ -50,6 +51,21 @@ class ExpertLabelValidatorTest(unittest.TestCase):
 
         self.assertTrue(any("duplicates" in error for error in errors))
         self.assertTrue(any("unknown finding" in error for error in errors))
+
+    def test_rejects_unknown_review_status(self) -> None:
+        errors = validate(
+            {
+                "schemaVersion": 1,
+                "labels": [
+                    {
+                        "packageName": "com.example.app",
+                        "reviewStatus": "DONEISH",
+                    }
+                ],
+            }
+        )
+
+        self.assertTrue(any("reviewStatus" in error for error in errors))
 
 
 if __name__ == "__main__":
