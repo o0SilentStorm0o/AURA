@@ -80,3 +80,11 @@ enum class DefensiveFindingSeverity {
     MEDIUM,
     HIGH
 }
+
+enum class RemediationScope {
+    USER,
+    EXPERT_AUDIT,
+    ENTERPRISE_ADMIN,
+    RESEARCH,
+    NONE
+}

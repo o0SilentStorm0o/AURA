@@ -504,6 +504,19 @@ def assert_expectations(export_path: Path) -> None:
             failures.append(
                 f"{expectation.package_name}: expected {expectation.expected_color}, got {actual}"
             )
+        recommended_action_ids = {
+            action.get("actionId")
+            for action in assessment.get("decision", {}).get("recommendedActions", [])
+        }
+        if expectation.expected_color == "RED":
+            expected_actions = {"disable_risky_special_access", "uninstall_or_disable_app"}
+            missing_actions = expected_actions - recommended_action_ids
+            if missing_actions:
+                failures.append(
+                    f"{expectation.package_name}: missing RED recommended actions {sorted(missing_actions)}"
+                )
+        if expectation.expected_color == "GRAY" and "abstain_collect_more_context" not in recommended_action_ids:
+            failures.append(f"{expectation.package_name}: missing GRAY abstention recommended action")
         if expectation.expected_special_access:
             special_access = assessment["snapshot"].get("specialAccess", {})
             for name, expected_state in expectation.expected_special_access.items():
@@ -566,6 +579,11 @@ def assert_expectations(export_path: Path) -> None:
             failures.append(f"{package_name}: expected optional platform audit BLUE, got {actual}")
         if assessment["decision"].get("userAlert") is not False:
             failures.append(f"{package_name}: BLUE platform audit must not be a user alert")
+        recommended_actions = assessment.get("decision", {}).get("recommendedActions", [])
+        if "audit_platform_component" not in {action.get("actionId") for action in recommended_actions}:
+            failures.append(f"{package_name}: BLUE platform audit missing audit_platform_component action")
+        if any(action.get("userFacing") is True for action in recommended_actions):
+            failures.append(f"{package_name}: BLUE platform audit action must not be user-facing")
 
     if failures:
         raise AssertionError("\n".join(failures))

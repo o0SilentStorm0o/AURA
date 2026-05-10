@@ -151,6 +151,15 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
             "auraDecision": assessment.get("decision", {}).get("color"),
             "auraUserAlert": bool(assessment.get("decision", {}).get("userAlert", False)),
             "auraActionabilityClass": assessment.get("decision", {}).get("actionabilityClass"),
+            "auraRecommendedActionIds": [
+                action.get("actionId")
+                for action in assessment.get("decision", {}).get("recommendedActions", [])
+            ],
+            "auraUserFacingRecommendedActionCount": sum(
+                1
+                for action in assessment.get("decision", {}).get("recommendedActions", [])
+                if action.get("userFacing") is True
+            ),
             "defensiveFindingTypes": sorted(defensive_findings_by_package.get(package_name, [])),
             "baselines": [baseline.__dict__ for baseline in baselines],
         }

@@ -1,8 +1,10 @@
 package cz.davidstrnadel.aura.reasoning
 
+import cz.davidstrnadel.aura.core.ActionabilityClass
 import cz.davidstrnadel.aura.core.DecisionColor
 import cz.davidstrnadel.aura.core.ObservedComponent
 import cz.davidstrnadel.aura.core.ObservabilityState
+import cz.davidstrnadel.aura.core.RemediationScope
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,6 +62,9 @@ class DecisionPolicyTest {
         assertEquals(DecisionColor.BLUE, assessment.decision.color)
         assertFalse(assessment.decision.userAlert)
         assertTrue(assessment.decision.expertFinding)
+        assertTrue(assessment.decision.recommendedActions.none { it.userFacing })
+        assertTrue(assessment.decision.recommendedActions.any { it.scope == RemediationScope.EXPERT_AUDIT })
+        assertTrue(assessment.decision.recommendedActions.any { it.actionId == "audit_platform_component" })
     }
 
     @Test
@@ -73,6 +78,7 @@ class DecisionPolicyTest {
 
         assertEquals(DecisionColor.GRAY, assessment.decision.color)
         assertFalse(assessment.decision.userAlert)
+        assertTrue(assessment.decision.recommendedActions.any { it.actionId == "abstain_collect_more_context" })
     }
 
     @Test
@@ -97,6 +103,9 @@ class DecisionPolicyTest {
 
         assertEquals(DecisionColor.RED, assessment.decision.color)
         assertTrue(assessment.decision.userAlert)
+        assertTrue(assessment.decision.recommendedActions.any { it.actionId == "disable_risky_special_access" })
+        assertTrue(assessment.decision.recommendedActions.any { it.actionabilityClass == ActionabilityClass.USER_CAN_UNINSTALL })
+        assertTrue(assessment.decision.recommendedActions.any { it.destructive })
     }
 
     @Test

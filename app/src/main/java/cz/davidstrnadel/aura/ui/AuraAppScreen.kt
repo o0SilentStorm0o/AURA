@@ -48,6 +48,7 @@ import cz.davidstrnadel.aura.core.AuraAssessment
 import cz.davidstrnadel.aura.core.DecisionColor
 import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
 import cz.davidstrnadel.aura.core.EvidenceItem
+import cz.davidstrnadel.aura.core.RecommendedAction
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -259,6 +260,7 @@ private fun AppDetailPanel(
             text = assessment.decision.explanation,
             style = MaterialTheme.typography.bodyMedium
         )
+        RecommendedActionsList(assessment.decision.recommendedActions)
         EvidenceList(assessment.evidence)
         DefensiveFindingsList(findings)
     }
@@ -325,6 +327,30 @@ private fun EvidenceList(evidence: List<EvidenceItem>) {
             fontFamily = FontFamily.Monospace,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun RecommendedActionsList(actions: List<RecommendedAction>) {
+    if (actions.isEmpty()) return
+    Spacer(Modifier.height(12.dp))
+    Text("Recommended actions", style = MaterialTheme.typography.titleSmall)
+    actions.take(6).forEach { action ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "${action.actionId} ${action.scope} ${action.actionabilityClass}",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
+        Text(
+            text = action.title,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = action.description,
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }

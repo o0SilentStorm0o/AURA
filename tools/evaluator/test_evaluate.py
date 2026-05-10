@@ -41,6 +41,12 @@ def assessment(
             "color": decision,
             "userAlert": decision == "RED",
             "actionabilityClass": "USER_CAN_ONLY_REVIEW",
+            "recommendedActions": [
+                {
+                    "actionId": "unit_action",
+                    "userFacing": decision == "RED",
+                }
+            ],
         },
     }
 
@@ -134,6 +140,7 @@ class EvaluatorMetricsTest(unittest.TestCase):
         self.assertEqual(1.0, result["modelMetrics"]["full_aura"]["user_actionable_precision"])
         self.assertEqual(1.0, result["modelMetrics"]["full_aura"]["platform_audit_separation"])
         self.assertEqual(1.0, result["modelMetrics"]["full_aura"]["abstention_correctness"])
+        self.assertEqual(["unit_action"], result["rows"][0]["auraRecommendedActionIds"])
         self.assertEqual(
             0.3333,
             result["comparisons"]["aura_non_actionable_critical_alert_rate_reduction_vs_permission_only"],

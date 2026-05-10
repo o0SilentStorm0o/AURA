@@ -9,7 +9,7 @@ This document separates what exists in the current Research MVP from planned wor
 - `researchFullStandardDebug` and `playSafeStandardDebug` builds.
 - `QUERY_ALL_PACKAGES` and `PACKAGE_USAGE_STATS` only in the `researchFull` manifest.
 - PackageManager snapshot collector for package identity, permissions, components, signing digests, installer, source path, partition hints, and special-access metadata.
-- Versioned `ObservedAppSnapshot`, first-class `EvidenceItem`, exact `ObservabilityState`, `ActionabilityClass`, `RiskVector`, and `AuraDecision`.
+- Versioned `ObservedAppSnapshot`, first-class `EvidenceItem`, exact `ObservabilityState`, `ActionabilityClass`, `RiskVector`, `AuraDecision`, and deterministic `RecommendedAction`.
 - PackageManager-first role inference, provenance classification, role/provenance-aware decision policy, and snapshot-first temporal episode detector.
 - Stable JSON export saved locally in app-private storage as `files/exports/aura-last-scan.json`.
 - Export now includes a scan-history summary with retained scan counts, package
@@ -32,11 +32,11 @@ This document separates what exists in the current Research MVP from planned wor
   and lab Accessibility observer work.
 - Research-console UI with decision counts, scan-history summary, selectable app
   detail, risk-vector bars, actionability/provenance/role fields, first-class
-  evidence items, and per-app defensive findings.
+  evidence items, recommended actions, and per-app defensive findings.
 
 ## Not Yet Implemented
 
-- Human-facing remediation text and richer evidence graph visualization.
+- Richer evidence graph visualization.
 - Full expert review workflow beyond schema validation and controlled-scenario labels.
 - Firmware-scale OEM/preinstall analysis beyond safe APK inventory collection.
 - Binary Transparency verification.

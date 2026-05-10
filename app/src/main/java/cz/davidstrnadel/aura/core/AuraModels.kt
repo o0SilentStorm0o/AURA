@@ -83,6 +83,17 @@ data class RiskVector(
 )
 
 @JsonClass(generateAdapter = true)
+data class RecommendedAction(
+    val actionId: String,
+    val title: String,
+    val description: String,
+    val actionabilityClass: ActionabilityClass,
+    val scope: RemediationScope,
+    val userFacing: Boolean,
+    val destructive: Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
 data class AuraDecision(
     val color: DecisionColor,
     val userAlert: Boolean,
@@ -90,7 +101,8 @@ data class AuraDecision(
     val actionabilityClass: ActionabilityClass,
     val title: String,
     val explanation: String,
-    val evidenceIds: List<String>
+    val evidenceIds: List<String>,
+    val recommendedActions: List<RecommendedAction> = emptyList()
 )
 
 @JsonClass(generateAdapter = true)

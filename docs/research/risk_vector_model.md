@@ -19,6 +19,18 @@ Decision policy:
 - `GREEN`: expected for role, sufficient provenance confidence, low abuse evidence.
 - `YELLOW`: review recommended but not a panic alert.
 
+Each `AuraDecision` also exports deterministic `recommendedActions`.
+These are derived from decision color, `ActionabilityClass`, provenance, and
+active risky capability state. They are not free-form detector output:
+
+- `RED` actions may be user-facing, such as disabling active special access or
+  uninstalling a user-removable app.
+- `BLUE` actions are expert/platform audit actions and must not appear as
+  primary panic guidance.
+- `GRAY` actions emphasize abstention and collecting more context.
+- `GREEN` actions generally state that no user action is required for the
+  observed scan evidence.
+
 Primary evaluation metrics:
 
 - `non_actionable_critical_alert_rate`
