@@ -19,6 +19,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 AURA_PACKAGE = "cz.davidstrnadel.aura.research"
 OUT_DIR = ROOT / "artifacts" / "scenario_runner"
+SUSPICIOUS_ACCESSIBILITY = (
+    "com.flashlight.cleaner.update/"
+    "com.flashlight.cleaner.update.FakeAccessibilityService"
+)
+SUSPICIOUS_NOTIFICATION = (
+    "com.flashlight.cleaner.update/"
+    "com.flashlight.cleaner.update.FakeNotificationListenerService"
+)
 
 
 @dataclass(frozen=True)
@@ -31,6 +39,7 @@ class ScenarioExpectation:
     platform_audit: bool = False
     abstention_expected: bool = False
     expected_special_access: dict[str, str] | None = None
+    expected_temporal_episodes: list[str] | None = None
 
 
 EXPECTATIONS = [
@@ -46,6 +55,10 @@ EXPECTATIONS = [
             "overlay": "OBSERVED_ENABLED",
             "request_install_packages": "DECLARED_ONLY",
         },
+        expected_temporal_episodes=[
+            "SIDELOAD_TO_ACCESSIBILITY",
+            "SIDELOAD_TO_NOTIFICATION_LISTENER",
+        ],
     ),
     ScenarioExpectation(
         "com.example.lowriskutility",
@@ -153,46 +166,54 @@ def restore_secure_setting(name: str, value: str) -> None:
         put_secure_setting(name, value)
 
 
+def clean_restore_state(raw_original: dict[str, str]) -> dict[str, str]:
+    clean_accessibility = remove_component(
+        raw_original["enabled_accessibility_services"],
+        SUSPICIOUS_ACCESSIBILITY,
+    )
+    clean_notification = remove_component(
+        raw_original["enabled_notification_listeners"],
+        SUSPICIOUS_NOTIFICATION,
+    )
+    return {
+        "enabled_accessibility_services": clean_accessibility,
+        "accessibility_enabled": raw_original["accessibility_enabled"] if clean_accessibility else "0",
+        "enabled_notification_listeners": clean_notification,
+    }
+
+
+def current_special_access_state() -> dict[str, str]:
+    return {
+        "enabled_accessibility_services": secure_setting("enabled_accessibility_services"),
+        "accessibility_enabled": secure_setting("accessibility_enabled"),
+        "enabled_notification_listeners": secure_setting("enabled_notification_listeners"),
+    }
+
+
+def remove_lab_special_access() -> dict[str, str]:
+    restore_state = clean_restore_state(current_special_access_state())
+    restore_special_access(restore_state)
+    return restore_state
+
+
 def configure_special_access() -> dict[str, str]:
     raw_original = {
         "enabled_accessibility_services": secure_setting("enabled_accessibility_services"),
         "accessibility_enabled": secure_setting("accessibility_enabled"),
         "enabled_notification_listeners": secure_setting("enabled_notification_listeners"),
     }
-
-    suspicious_accessibility = (
-        "com.flashlight.cleaner.update/"
-        "com.flashlight.cleaner.update.FakeAccessibilityService"
-    )
-    suspicious_notification = (
-        "com.flashlight.cleaner.update/"
-        "com.flashlight.cleaner.update.FakeNotificationListenerService"
-    )
-
-    clean_accessibility = remove_component(
-        raw_original["enabled_accessibility_services"],
-        suspicious_accessibility,
-    )
-    clean_notification = remove_component(
-        raw_original["enabled_notification_listeners"],
-        suspicious_notification,
-    )
-    restore_state = {
-        "enabled_accessibility_services": clean_accessibility,
-        "accessibility_enabled": raw_original["accessibility_enabled"] if clean_accessibility else "0",
-        "enabled_notification_listeners": clean_notification,
-    }
+    restore_state = clean_restore_state(raw_original)
 
     put_secure_setting("accessibility_enabled", "1")
     put_secure_setting(
         "enabled_accessibility_services",
-        append_component(clean_accessibility, suspicious_accessibility),
+        append_component(restore_state["enabled_accessibility_services"], SUSPICIOUS_ACCESSIBILITY),
     )
     put_secure_setting(
         "enabled_notification_listeners",
-        append_component(clean_notification, suspicious_notification),
+        append_component(restore_state["enabled_notification_listeners"], SUSPICIOUS_NOTIFICATION),
     )
-    adb("shell", "cmd", "notification", "allow_listener", suspicious_notification, "0")
+    adb("shell", "cmd", "notification", "allow_listener", SUSPICIOUS_NOTIFICATION, "0")
     adb("shell", "appops", "set", "com.flashlight.cleaner.update", "SYSTEM_ALERT_WINDOW", "allow")
     return restore_state
 
@@ -208,18 +229,23 @@ def restore_special_access(restore_state: dict[str, str] | None) -> None:
         "cmd",
         "notification",
         "disallow_listener",
-        "com.flashlight.cleaner.update/com.flashlight.cleaner.update.FakeNotificationListenerService",
+        SUSPICIOUS_NOTIFICATION,
         "0",
         check=False,
     )
     adb("shell", "appops", "set", "com.flashlight.cleaner.update", "SYSTEM_ALERT_WINDOW", "deny", check=False)
 
 
-def run_aura_and_pull_export() -> Path:
-    adb("shell", "pm", "clear", AURA_PACKAGE)
+def run_aura_and_pull_export(output_name: str, *, clear_data: bool) -> Path:
+    if clear_data:
+        adb("shell", "pm", "clear", AURA_PACKAGE)
+    else:
+        adb("shell", "am", "force-stop", AURA_PACKAGE, check=False)
+        adb("shell", "run-as", AURA_PACKAGE, "rm", "-f", "files/exports/aura-last-scan.json", check=False)
+
     adb("shell", "monkey", "-p", AURA_PACKAGE, "-c", "android.intent.category.LAUNCHER", "1")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    export_path = OUT_DIR / "aura-last-scan.json"
+    export_path = OUT_DIR / output_name
 
     for _ in range(60):
         probe = adb(
@@ -322,6 +348,18 @@ def assert_expectations(export_path: Path) -> None:
                         f"{expectation.package_name}: expected specialAccess[{name}]="
                         f"{expected_state}, got {actual_state}"
                     )
+        if expectation.expected_temporal_episodes:
+            actual_temporal = {
+                episode["type"]
+                for episode in export.get("temporalEpisodes", [])
+                if episode["packageName"] == expectation.package_name
+            }
+            for expected_type in expectation.expected_temporal_episodes:
+                if expected_type not in actual_temporal:
+                    failures.append(
+                        f"{expectation.package_name}: missing temporal episode {expected_type}; "
+                        f"observed {sorted(actual_temporal)}"
+                    )
 
     if failures:
         raise AssertionError("\n".join(failures))
@@ -346,8 +384,11 @@ def main() -> int:
     ensure_device()
     install_apps()
     try:
+        remove_lab_special_access()
+        baseline_export_path = run_aura_and_pull_export("aura-baseline-scan.json", clear_data=True)
+        print(f"Baseline AURA export: {baseline_export_path}")
         restore_state = configure_special_access()
-        export_path = run_aura_and_pull_export()
+        export_path = run_aura_and_pull_export("aura-last-scan.json", clear_data=False)
         evaluation_path = evaluate(export_path)
         assert_expectations(export_path)
         capture_logcat()

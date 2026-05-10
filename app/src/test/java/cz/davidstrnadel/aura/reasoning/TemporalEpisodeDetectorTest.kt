@@ -28,6 +28,73 @@ class TemporalEpisodeDetectorTest {
     }
 
     @Test
+    fun detectsAccessibilityEnableAfterBaselineScanWithinThirtyMinutes() {
+        val previous = TestSnapshots.app(
+            packageName = "com.example.side",
+            installerPackageName = null,
+            specialAccess = TestSnapshots.defaultSpecialAccess()
+        ).let {
+            it.copy(
+                firstInstallTime = it.collectedAt - 5 * 60 * 1000L,
+                collectedAt = it.collectedAt
+            )
+        }
+        val current = previous.copy(
+            collectedAt = previous.collectedAt + 5 * 60 * 1000L,
+            specialAccess = previous.specialAccess + (
+                "accessibility_service" to ObservabilityState.OBSERVED_ENABLED
+                )
+        )
+
+        val episodes = detector.detect(previous, current)
+
+        assertEquals(TemporalEpisodeType.SIDELOAD_TO_ACCESSIBILITY, episodes.single().type)
+    }
+
+    @Test
+    fun detectsAccessibilityAndNotificationListenerInSameScan() {
+        val previous = TestSnapshots.app(
+            packageName = "com.example.side",
+            installerPackageName = null,
+            specialAccess = TestSnapshots.defaultSpecialAccess()
+        ).let {
+            it.copy(firstInstallTime = it.collectedAt - 5 * 60 * 1000L)
+        }
+        val current = previous.copy(
+            collectedAt = previous.collectedAt + 5 * 60 * 1000L,
+            specialAccess = previous.specialAccess + mapOf(
+                "accessibility_service" to ObservabilityState.OBSERVED_ENABLED,
+                "notification_listener" to ObservabilityState.OBSERVED_ENABLED
+            )
+        )
+
+        val episodes = detector.detect(previous, current)
+
+        assertEquals(
+            listOf(
+                TemporalEpisodeType.SIDELOAD_TO_ACCESSIBILITY,
+                TemporalEpisodeType.SIDELOAD_TO_NOTIFICATION_LISTENER
+            ),
+            episodes.map { it.type }
+        )
+    }
+
+    @Test
+    fun detectsBootPersistenceForNewlyObservedInstall() {
+        val current = TestSnapshots.app(
+            packageName = "com.example.side",
+            installerPackageName = null,
+            requestedPermissions = listOf("android.permission.RECEIVE_BOOT_COMPLETED")
+        ).let {
+            it.copy(firstInstallTime = it.collectedAt - 10 * 60 * 1000L)
+        }
+
+        val episodes = detector.detect(null, current)
+
+        assertEquals(TemporalEpisodeType.BOOT_PERSISTENCE_AFTER_SIDELOAD, episodes.single().type)
+    }
+
+    @Test
     fun ignoresAccessibilityEnableOutsideThirtyMinutes() {
         val previous = TestSnapshots.app(
             packageName = "com.example.side",

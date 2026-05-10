@@ -9,11 +9,9 @@ import java.util.UUID
 
 class TemporalEpisodeDetector {
     fun detect(previous: ObservedAppSnapshot?, current: ObservedAppSnapshot): List<TemporalEpisode> {
-        if (previous == null) return emptyList()
-
         val episodes = mutableListOf<TemporalEpisode>()
-        val wasRecentlyInstalled = current.firstInstallTime >= previous.collectedAt
         val packageName = current.packageName
+        val ageSinceInstall = current.collectedAt - current.firstInstallTime
 
         fun add(type: TemporalEpisodeType, ttlMillis: Long, explanation: String) {
             val evidence = EvidenceFactory.item(
@@ -30,7 +28,7 @@ class TemporalEpisodeDetector {
                 scanId = current.scanId,
                 packageName = packageName,
                 type = type,
-                startedAt = maxOf(current.firstInstallTime, previous.collectedAt),
+                startedAt = maxOf(current.firstInstallTime, previous?.collectedAt ?: current.firstInstallTime),
                 detectedAt = current.collectedAt,
                 ttlMillis = ttlMillis,
                 evidenceIds = listOf(evidence.evidenceId),
@@ -38,10 +36,10 @@ class TemporalEpisodeDetector {
             )
         }
 
-        if (wasRecentlyInstalled &&
+        if (previous != null &&
             previous.specialAccess["accessibility_service"] != ObservabilityState.OBSERVED_ENABLED &&
             current.specialAccess["accessibility_service"] == ObservabilityState.OBSERVED_ENABLED &&
-            current.collectedAt - current.firstInstallTime <= SIDELOAD_TO_ACCESSIBILITY_TTL
+            ageSinceInstall in 0..SIDELOAD_TO_ACCESSIBILITY_TTL
         ) {
             add(
                 TemporalEpisodeType.SIDELOAD_TO_ACCESSIBILITY,
@@ -50,10 +48,10 @@ class TemporalEpisodeDetector {
             )
         }
 
-        if (wasRecentlyInstalled &&
+        if (previous != null &&
             previous.specialAccess["notification_listener"] != ObservabilityState.OBSERVED_ENABLED &&
             current.specialAccess["notification_listener"] == ObservabilityState.OBSERVED_ENABLED &&
-            current.collectedAt - current.firstInstallTime <= SIDELOAD_TO_NOTIFICATION_LISTENER_TTL
+            ageSinceInstall in 0..SIDELOAD_TO_NOTIFICATION_LISTENER_TTL
         ) {
             add(
                 TemporalEpisodeType.SIDELOAD_TO_NOTIFICATION_LISTENER,
@@ -72,9 +70,9 @@ class TemporalEpisodeDetector {
             )
         }
 
-        if (wasRecentlyInstalled &&
+        if ((previous == null || previous.firstInstallTime != current.firstInstallTime) &&
             current.requestedPermissions.any { it.endsWith("RECEIVE_BOOT_COMPLETED") } &&
-            current.collectedAt - current.firstInstallTime <= BOOT_PERSISTENCE_AFTER_SIDELOAD_TTL
+            ageSinceInstall in 0..BOOT_PERSISTENCE_AFTER_SIDELOAD_TTL
         ) {
             add(
                 TemporalEpisodeType.BOOT_PERSISTENCE_AFTER_SIDELOAD,

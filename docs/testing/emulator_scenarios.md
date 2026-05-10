@@ -16,6 +16,14 @@ For repeatability, the runner uses `adb shell settings`, `adb shell appops`, and
 access in the lab. It also restores Accessibility, notification-listener, and
 overlay state in a `finally` block so one run does not contaminate the next.
 
+The suspicious scenario is intentionally two-phase:
+
+1. Launch AURA once with the fixture installed but special access disabled.
+   This seeds AURA's private previous-snapshot state.
+2. Enable Accessibility, notification listener, and overlay through adb, launch
+   AURA again without clearing app data, then assert both the final decision and
+   the temporal episodes derived from the snapshot diff.
+
 ## Fixture Apps
 
 - `com.flashlight.cleaner.update`: suspicious lab app declaring overlay,
@@ -42,8 +50,14 @@ The suspicious agent must also be observed with:
 - `overlay = OBSERVED_ENABLED`
 - `request_install_packages = DECLARED_ONLY`
 
+It must also produce temporal episodes:
+
+- `SIDELOAD_TO_ACCESSIBILITY`
+- `SIDELOAD_TO_NOTIFICATION_LISTENER`
+
 The runner fails if the decision is correct but these evidence states are not
-actually present in the exported snapshot.
+actually present in the exported snapshot, or if the temporal episodes are
+missing from the second-phase export.
 
 ## Labelled Metrics
 

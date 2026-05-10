@@ -9,6 +9,8 @@ import cz.davidstrnadel.aura.core.DecisionColor
 import cz.davidstrnadel.aura.export.AuraJsonExporter
 import cz.davidstrnadel.aura.export.AuraScanExport
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
+import cz.davidstrnadel.aura.reasoning.TemporalEpisodeDetector
+import cz.davidstrnadel.aura.storage.SnapshotHistoryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +36,8 @@ data class AuraUiState(
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val collector = AppSnapshotCollector(application)
     private val assessmentEngine = AuraAssessmentEngine()
+    private val temporalEpisodeDetector = TemporalEpisodeDetector()
+    private val snapshotHistoryStore = SnapshotHistoryStore.fromContext(application)
     private val exporter = AuraJsonExporter()
     private val _state = MutableStateFlow(AuraUiState())
 
@@ -48,7 +52,12 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             val scanId = UUID.randomUUID().toString()
             _state.value = AuraUiState(loading = true, scanId = scanId)
             runCatching {
-                val assessments = collector.collect(scanId)
+                val previousSnapshots = snapshotHistoryStore.loadByPackage()
+                val snapshots = collector.collect(scanId)
+                val temporalEpisodes = snapshots.flatMap { current ->
+                    temporalEpisodeDetector.detect(previousSnapshots[current.packageName], current)
+                }
+                val assessments = snapshots
                     .map { assessmentEngine.assess(it) }
                     .sortedWith(compareBy<AuraAssessment> { decisionRank(it) }.thenBy { it.snapshot.packageName })
                 val flavor = assessments.firstOrNull()?.snapshot?.flavor.orEmpty()
@@ -58,7 +67,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     generatedAt = System.currentTimeMillis(),
                     flavor = flavor,
                     assessments = assessments,
-                    temporalEpisodes = emptyList()
+                    temporalEpisodes = temporalEpisodes
                 )
                 val json = exporter.toJson(export)
                 val exportFile = getApplication<Application>()
@@ -67,6 +76,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     .also { it.mkdirs() }
                     .resolve("aura-last-scan.json")
                 exportFile.writeText(json)
+                snapshotHistoryStore.save(snapshots)
                 _state.value = AuraUiState(
                     loading = false,
                     scanId = scanId,
