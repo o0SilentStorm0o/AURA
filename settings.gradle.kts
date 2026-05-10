@@ -16,3 +16,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "AURA"
 include(":app")
+include(":testapps:suspicious-agent")
+include(":testapps:benign-accessibility")
+include(":testapps:lowrisk-utility")
+include(":testapps:sensitive-bank")

@@ -13,10 +13,13 @@ local.properties
 .DS_Store
 /build
 /app/build
+**/build/
 /captures
 artifacts/
 .externalNativeBuild
 .cxx
+__pycache__/
+*.pyc
 *.jks
 *.keystore
 *.p12

@@ -1,6 +1,7 @@
 package cz.davidstrnadel.aura.reasoning
 
 import cz.davidstrnadel.aura.core.DecisionColor
+import cz.davidstrnadel.aura.core.ObservedComponent
 import cz.davidstrnadel.aura.core.ObservabilityState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -96,6 +97,38 @@ class DecisionPolicyTest {
 
         assertEquals(DecisionColor.RED, assessment.decision.color)
         assertTrue(assessment.decision.userAlert)
+    }
+
+    @Test
+    fun deceptiveSideloadDeclaringAccessibilityServiceCanStillBecomeRed() {
+        val snapshot = TestSnapshots.app(
+            packageName = "com.flashlight.cleaner.update",
+            appLabel = "Security Update",
+            installerPackageName = null,
+            requestedPermissions = listOf(
+                "android.permission.REQUEST_INSTALL_PACKAGES",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+                "android.permission.SYSTEM_ALERT_WINDOW"
+            ),
+            components = listOf(
+                ObservedComponent(
+                    name = "com.flashlight.cleaner.update.FakeAccessibilityService",
+                    type = "service",
+                    exported = true,
+                    permission = "android.permission.BIND_ACCESSIBILITY_SERVICE"
+                )
+            ),
+            specialAccess = TestSnapshots.defaultSpecialAccess() + mapOf(
+                "accessibility_service" to ObservabilityState.OBSERVED_ENABLED,
+                "notification_listener" to ObservabilityState.OBSERVED_ENABLED,
+                "overlay" to ObservabilityState.OBSERVED_ENABLED
+            )
+        )
+
+        val assessment = engine.assess(snapshot)
+
+        assertEquals(DecisionColor.RED, assessment.decision.color)
+        assertTrue(assessment.role.predicted.name != "ACCESSIBILITY_TOOL")
     }
 
     @Test

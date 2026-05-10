@@ -37,8 +37,26 @@ class BaselineResult:
     score: float
 
 
+@dataclass(frozen=True)
+class ScenarioLabel:
+    package_name: str
+    expected_decision: str | None = None
+    controlled_abuse: bool = False
+    user_actionable: bool = False
+    platform_audit: bool = False
+    abstention_expected: bool = False
+
+
+def component_permissions(snapshot: dict[str, Any]) -> set[str]:
+    return {
+        component.get("permission")
+        for component in snapshot.get("components", [])
+        if component.get("permission")
+    }
+
+
 def permission_only(snapshot: dict[str, Any]) -> BaselineResult:
-    requested = set(snapshot.get("requestedPermissions", []))
+    requested = set(snapshot.get("requestedPermissions", [])) | component_permissions(snapshot)
     score = min(1.0, len(requested & DANGEROUS_PERMISSIONS) / 4.0)
     return BaselineResult("permission_only", "CRITICAL" if score >= 0.75 else "OK", score)
 
@@ -80,7 +98,25 @@ def full_aura(assessment: dict[str, Any]) -> BaselineResult:
     return BaselineResult("full_aura", decision, score)
 
 
-def evaluate(export: dict[str, Any]) -> dict[str, Any]:
+def load_labels(path: Path | None) -> dict[str, ScenarioLabel]:
+    if path is None:
+        return {}
+    payload = json.loads(path.read_text())
+    return {
+        item["packageName"]: ScenarioLabel(
+            package_name=item["packageName"],
+            expected_decision=item.get("expectedDecision"),
+            controlled_abuse=bool(item.get("controlledAbuse", False)),
+            user_actionable=bool(item.get("userActionable", False)),
+            platform_audit=bool(item.get("platformAudit", False)),
+            abstention_expected=bool(item.get("abstentionExpected", False)),
+        )
+        for item in payload.get("labels", [])
+    }
+
+
+def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = None) -> dict[str, Any]:
+    labels = labels or {}
     episodes = export.get("temporalEpisodes", [])
     episode_packages = {episode["packageName"] for episode in episodes}
     rows: list[dict[str, Any]] = []
@@ -95,18 +131,30 @@ def evaluate(export: dict[str, Any]) -> dict[str, Any]:
             temporal(assessment, episode_packages),
             full_aura(assessment),
         ]
-        rows.append(
-            {
-                "packageName": snapshot["packageName"],
-                "auraDecision": assessment.get("decision", {}).get("color"),
-                "baselines": [baseline.__dict__ for baseline in baselines],
+        package_name = snapshot["packageName"]
+        label = labels.get(package_name)
+        row = {
+            "packageName": package_name,
+            "auraDecision": assessment.get("decision", {}).get("color"),
+            "auraUserAlert": bool(assessment.get("decision", {}).get("userAlert", False)),
+            "auraActionabilityClass": assessment.get("decision", {}).get("actionabilityClass"),
+            "baselines": [baseline.__dict__ for baseline in baselines],
+        }
+        if label is not None:
+            row["label"] = {
+                "expectedDecision": label.expected_decision,
+                "controlledAbuse": label.controlled_abuse,
+                "userActionable": label.user_actionable,
+                "platformAudit": label.platform_audit,
+                "abstentionExpected": label.abstention_expected,
             }
-        )
+        rows.append(row)
 
     return {
         "schemaVersion": 1,
         "scanId": export.get("scanId"),
         "evaluatedApps": len(rows),
+        "labelledApps": len(labels),
         "metrics": compute_metrics(rows),
         "rows": rows,
     }
@@ -122,32 +170,68 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
             "abstention_correctness": 0.0,
         }
 
-    aura_red = sum(1 for row in rows if row["auraDecision"] == "RED")
-    aura_blue = sum(1 for row in rows if row["auraDecision"] == "BLUE")
-    aura_gray = sum(1 for row in rows if row["auraDecision"] == "GRAY")
+    labelled = [row for row in rows if "label" in row]
+    metric_rows = labelled if labelled else rows
+
+    aura_red = sum(1 for row in metric_rows if row["auraDecision"] == "RED")
+    aura_blue = sum(1 for row in metric_rows if row["auraDecision"] == "BLUE")
+    aura_gray = sum(1 for row in metric_rows if row["auraDecision"] == "GRAY")
     permission_critical = sum(
         1
-        for row in rows
+        for row in metric_rows
         for baseline in row["baselines"]
         if baseline["model"] == "permission_only" and baseline["decision"] == "CRITICAL"
     )
 
+    non_actionable = [
+        row
+        for row in metric_rows
+        if row.get("label", {}).get("userActionable") is False
+    ]
+    non_actionable_red = sum(1 for row in non_actionable if row["auraDecision"] == "RED")
+    red_rows = [row for row in metric_rows if row["auraDecision"] == "RED"]
+    red_user_actionable = sum(1 for row in red_rows if row.get("label", {}).get("userActionable") is True)
+    controlled_abuse = [row for row in metric_rows if row.get("label", {}).get("controlledAbuse") is True]
+    controlled_abuse_red = sum(1 for row in controlled_abuse if row["auraDecision"] == "RED")
+    platform_audit = [row for row in metric_rows if row.get("label", {}).get("platformAudit") is True]
+    platform_audit_blue = sum(1 for row in platform_audit if row["auraDecision"] == "BLUE")
+    abstention_expected = [row for row in metric_rows if row.get("label", {}).get("abstentionExpected") is True]
+    abstention_gray = sum(1 for row in abstention_expected if row["auraDecision"] == "GRAY")
+
     return {
-        "non_actionable_critical_alert_rate": round(permission_critical / len(rows), 4),
-        "user_actionable_precision": round(aura_red / max(1, aura_red + aura_blue), 4),
-        "red_recall_controlled_abuse": 0.0,
-        "blue_platform_audit_separation": round(aura_blue / len(rows), 4),
-        "abstention_correctness": round(aura_gray / len(rows), 4),
+        "non_actionable_critical_alert_rate": round(
+            non_actionable_red / max(1, len(non_actionable)),
+            4,
+        ),
+        "user_actionable_precision": round(red_user_actionable / max(1, len(red_rows)), 4),
+        "red_recall_controlled_abuse": round(
+            controlled_abuse_red / max(1, len(controlled_abuse)),
+            4,
+        ),
+        "blue_platform_audit_separation": round(
+            platform_audit_blue / max(1, len(platform_audit)),
+            4,
+        ),
+        "abstention_correctness": round(
+            abstention_gray / max(1, len(abstention_expected)),
+            4,
+        ),
+        "permission_only_critical_rate": round(permission_critical / len(metric_rows), 4),
+        "aura_red_rate": round(aura_red / len(metric_rows), 4),
+        "aura_blue_rate": round(aura_blue / len(metric_rows), 4),
+        "aura_gray_rate": round(aura_gray / len(metric_rows), 4),
+        "metric_population": float(len(metric_rows)),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("export", type=Path, help="AURA JSON export")
+    parser.add_argument("--labels", type=Path, help="Optional scenario labels for controlled metrics")
     parser.add_argument("--out", type=Path, help="Optional output path")
     args = parser.parse_args()
 
-    result = evaluate(json.loads(args.export.read_text()))
+    result = evaluate(json.loads(args.export.read_text()), load_labels(args.labels))
     payload = json.dumps(result, indent=2, sort_keys=True)
     if args.out:
         args.out.write_text(payload + "\n")

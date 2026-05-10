@@ -44,3 +44,4 @@ See:
 - [observability_matrix.md](docs/research/observability_matrix.md)
 - [risk_vector_model.md](docs/research/risk_vector_model.md)
 - [development_status.md](docs/research/development_status.md)
+- [emulator_scenarios.md](docs/testing/emulator_scenarios.md)

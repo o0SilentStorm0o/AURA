@@ -51,12 +51,25 @@ class RoleInferenceEngine {
         if ("ACCESS_FINE_LOCATION" in permissions && listOf("map", "maps", "navigation", "nav").any { it in packageName || it in label }) {
             addCandidate(RoleCategory.MAPS_NAVIGATION, 0.82, "Location capability fits a maps/navigation role.", "maps-signals")
         }
-        if (
+        val declaresAccessibilityService =
             "android.permission.BIND_ACCESSIBILITY_SERVICE".lowercase() in componentNames &&
-            packageName != "android" &&
-            !packageName.startsWith("android.auto_generated_rro_")
-        ) {
-            addCandidate(RoleCategory.ACCESSIBILITY_TOOL, 0.78, "Manifest declares an Accessibility service.", "accessibility-service")
+                packageName != "android" &&
+                !packageName.startsWith("android.auto_generated_rro_")
+        val looksAssistive = listOf(
+            "accessibility",
+            "screenreader",
+            "screen reader",
+            "talkback",
+            "assistive",
+            "reader"
+        ).any { it in packageName || it in label }
+        if (declaresAccessibilityService && looksAssistive) {
+            addCandidate(
+                RoleCategory.ACCESSIBILITY_TOOL,
+                0.78,
+                "Manifest declares an Accessibility service and package/label signals an assistive tool.",
+                "accessibility-service-assistive"
+            )
         }
         if ("android.view.InputMethod".lowercase() in componentNames || "bind_input_method" in componentNames) {
             addCandidate(RoleCategory.KEYBOARD, 0.82, "Manifest declares an input method service.", "input-method")

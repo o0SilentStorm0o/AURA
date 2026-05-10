@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Open Screen Reader</string>
+    <string name="accessibility_description">Harmless accessibility tool fixture for AURA testing.</string>
+</resources>

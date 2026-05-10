@@ -7,6 +7,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import cz.davidstrnadel.aura.BuildConfig
 import cz.davidstrnadel.aura.core.ObservedAppSnapshot
 import cz.davidstrnadel.aura.core.ObservedComponent
@@ -21,6 +22,9 @@ class AppSnapshotCollector(private val context: Context) {
         val collectedAt = System.currentTimeMillis()
         val enabledAccessibility = secureSetting("enabled_accessibility_services")
         val enabledNotificationListeners = secureSetting("enabled_notification_listeners")
+        val enabledNotificationListenerPackages = runCatching {
+            NotificationManagerCompat.getEnabledListenerPackages(context)
+        }.getOrDefault(emptySet())
 
         return installedPackages().mapNotNull { packageInfo ->
             runCatching {
@@ -28,7 +32,8 @@ class AppSnapshotCollector(private val context: Context) {
                     scanId = scanId,
                     collectedAt = collectedAt,
                     enabledAccessibility = enabledAccessibility,
-                    enabledNotificationListeners = enabledNotificationListeners
+                    enabledNotificationListeners = enabledNotificationListeners,
+                    enabledNotificationListenerPackages = enabledNotificationListenerPackages
                 )
             }.getOrNull()
         }.sortedBy { it.packageName }
@@ -38,7 +43,8 @@ class AppSnapshotCollector(private val context: Context) {
         scanId: String,
         collectedAt: Long,
         enabledAccessibility: String,
-        enabledNotificationListeners: String
+        enabledNotificationListeners: String,
+        enabledNotificationListenerPackages: Set<String>
     ): ObservedAppSnapshot {
         val appInfo = applicationInfo
         val requested = requestedPermissions?.toList().orEmpty().sorted()
@@ -57,7 +63,8 @@ class AppSnapshotCollector(private val context: Context) {
             requestedPermissions = requested,
             components = components,
             enabledAccessibility = enabledAccessibility,
-            enabledNotificationListeners = enabledNotificationListeners
+            enabledNotificationListeners = enabledNotificationListeners,
+            enabledNotificationListenerPackages = enabledNotificationListenerPackages
         )
 
         return ObservedAppSnapshot(
@@ -171,7 +178,8 @@ class AppSnapshotCollector(private val context: Context) {
         requestedPermissions: List<String>,
         components: List<ObservedComponent>,
         enabledAccessibility: String,
-        enabledNotificationListeners: String
+        enabledNotificationListeners: String,
+        enabledNotificationListenerPackages: Set<String>
     ): Map<String, ObservabilityState> {
         val declaresAccessibility = components.any { it.permission == "android.permission.BIND_ACCESSIBILITY_SERVICE" }
         val declaresNotificationListener = components.any { it.permission == "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" }
@@ -185,7 +193,10 @@ class AppSnapshotCollector(private val context: Context) {
                 else -> ObservabilityState.OBSERVED_DISABLED
             },
             "notification_listener" to when {
-                declaresNotificationListener && settingContainsPackage(enabledNotificationListeners, packageName) -> ObservabilityState.OBSERVED_ENABLED
+                declaresNotificationListener && (
+                    settingContainsPackage(enabledNotificationListeners, packageName) ||
+                        packageName in enabledNotificationListenerPackages
+                    ) -> ObservabilityState.OBSERVED_ENABLED
                 declaresNotificationListener -> ObservabilityState.OBSERVED_DISABLED
                 else -> ObservabilityState.OBSERVED_DISABLED
             },

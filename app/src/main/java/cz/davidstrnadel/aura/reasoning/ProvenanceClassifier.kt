@@ -29,6 +29,8 @@ class ProvenanceClassifier {
                 Result(ProvenanceClass.PLAY_INSTALLED, 0.78, "Installer package is Google Play.")
             installer == "org.fdroid.fdroid" || installer.contains("fdroid") ->
                 Result(ProvenanceClass.FDROID_OR_OPEN_SOURCE, 0.74, "Installer package indicates F-Droid/open-source distribution.")
+            installer == "com.android.shell" ->
+                Result(ProvenanceClass.UNKNOWN_SIDELOAD, 0.70, "App was installed through adb/shell in a lab or sideload context.")
             snapshot.isPrivilegedApp && (sourceDir.startsWith("/system/priv-app") || sourceDir.startsWith("/product/priv-app")) ->
                 Result(ProvenanceClass.OPAQUE_PRIVILEGED, 0.62, "Privileged system location observed without transparency proof.")
             snapshot.isSystemApp ->

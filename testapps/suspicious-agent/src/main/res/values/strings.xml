@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Security Update</string>
+    <string name="accessibility_description">Harmless lab service for AURA scenario testing.</string>
+</resources>
