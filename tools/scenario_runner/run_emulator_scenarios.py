@@ -19,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 AURA_PACKAGE = "cz.davidstrnadel.aura.research"
 OUT_DIR = ROOT / "artifacts" / "scenario_runner"
+OFFLINE_ANALYSIS_PATH = OUT_DIR / "offline-apk-analysis.json"
 SUSPICIOUS_ACCESSIBILITY = (
     "com.flashlight.cleaner.update/"
     "com.flashlight.cleaner.update.FakeAccessibilityService"
@@ -404,6 +405,58 @@ def evaluate(export_path: Path) -> Path:
     return output_path
 
 
+def analyze_offline_apks() -> Path:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    run(
+        [
+            "python3",
+            "tools/apk_analyzer/analyze_apk.py",
+            apk("testapps/sensitive-bank/build/outputs/apk/debug/sensitive-bank-debug.apk"),
+            apk("testapps/leaky-bank/build/outputs/apk/debug/leaky-bank-debug.apk"),
+            "--out",
+            str(OFFLINE_ANALYSIS_PATH),
+        ]
+    )
+    return OFFLINE_ANALYSIS_PATH
+
+
+def assert_offline_analysis(analysis_path: Path) -> None:
+    payload = json.loads(analysis_path.read_text())
+    by_package = {
+        item["apk"]["packageName"]: item
+        for item in payload.get("apks", [])
+    }
+    failures: list[str] = []
+
+    sensitive = by_package.get("com.example.sensitivebank")
+    leaky = by_package.get("com.example.leakybank")
+    if sensitive is None:
+        failures.append("missing offline analysis for sensitive bank fixture")
+    elif sensitive.get("observations", {}).get("flagSecure", {}).get("observed") is not True:
+        failures.append("expected sensitive bank FLAG_SECURE static signal")
+
+    if leaky is None:
+        failures.append("missing offline analysis for leaky bank fixture")
+    else:
+        finding_types = {finding["findingType"] for finding in leaky.get("findings", [])}
+        expected = {
+            "BACKUP_ALLOWED",
+            "CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST",
+            "DEBUGGABLE_ENABLED",
+            "FILTER_TOUCHES_WHEN_OBSCURED_NOT_OBSERVED_SENSITIVE_APP",
+            "NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED",
+            "UNPROTECTED_EXPORTED_COMPONENT",
+        }
+        missing = expected - finding_types
+        if missing:
+            failures.append(f"leaky bank missing offline findings: {sorted(missing)}")
+        if leaky.get("observations", {}).get("flagSecure", {}).get("observed") is not True:
+            failures.append("expected leaky bank FLAG_SECURE static signal")
+
+    if failures:
+        raise AssertionError("\n".join(failures))
+
+
 def assert_expectations(export_path: Path) -> None:
     export = json.loads(export_path.read_text())
     by_package = {
@@ -530,6 +583,8 @@ def main() -> int:
     restore_state: dict[str, str] | None = None
     original_usage_stats_mode: str | None = None
     build_all()
+    offline_analysis_path = analyze_offline_apks()
+    assert_offline_analysis(offline_analysis_path)
     ensure_device()
     install_apps()
     try:

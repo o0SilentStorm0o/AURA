@@ -15,6 +15,7 @@ This document separates what exists in the current Research MVP from planned wor
 - Atomic export/history writes so adb pulls do not observe partially written JSON.
 - Private previous-snapshot state saved as `files/state/previous-snapshots.json` for snapshot-diff temporal episodes.
 - On-device defensive surface findings for observable manifest/app metadata: debuggable sensitive apps, backup allowed for sensitive apps, best-effort cleartext traffic allowance, and unprotected exported non-launcher components.
+- Offline APK analyzer for detailed defensive-surface heuristics: `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, `accessibilityDataSensitive`, and manifest component metadata, all with confidence and observability state.
 - Opt-in UsageStats foreground correlation for the `SPECIAL_ACCESS_PLUS_SENSITIVE_APP` temporal episode in `researchFull`; this uses only package-level foreground events, not screen, notification, or network content.
 - Python evaluator for permission-only, capability-only, role-aware, role+provenance, temporal, and full AURA baselines, including per-model metrics and AURA-vs-permission-only comparisons.
 - Unit tests for observability enum contract, actionability enum contract, role/risk/provenance decisions, JSON shape, and temporal TTL behavior.
@@ -25,7 +26,6 @@ This document separates what exists in the current Research MVP from planned wor
 ## Not Yet Implemented
 
 - Multi-scan history beyond the immediately previous snapshot set.
-- Offline APK analyzer for detailed `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, and `accessibilityDataSensitive`.
 - Asset-driven rules loaded directly from JSON assets; current rules are mirrored in code for the MVP.
 - Human-facing detailed app drill-down with evidence graph and remediation.
 - Expert review labeling workflow beyond the current controlled-scenario labels.

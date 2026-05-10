@@ -3,6 +3,7 @@
         android:allowBackup="true"
         android:debuggable="true"
         android:label="Fixture Bank Debug"
+        android:networkSecurityConfig="@xml/leaky_network_security_config"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
         <activity

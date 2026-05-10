@@ -9,8 +9,9 @@ python3 tools/scenario_runner/run_emulator_scenarios.py
 The runner uses a booted emulator via `adb`, builds AURA plus fixture APKs,
 installs them, toggles special-access state for the suspicious fixture, grants
 AURA UsageStats only for the second-phase lab scan, launches AURA, pulls
-`files/exports/aura-last-scan.json`, runs the Python evaluator, and asserts the
-expected decisions.
+`files/exports/aura-last-scan.json`, runs the Python evaluator, runs the
+offline APK analyzer for defensive-surface details, and asserts the expected
+decisions.
 
 For repeatability, the runner uses `adb shell settings`, `adb shell appops`, and
 `adb shell cmd notification allow_listener` to simulate user-enabled special
@@ -87,6 +88,13 @@ The leaky bank fixture must produce defensive surface findings:
 These findings are exported under `defensiveSurfaceFindings`; they are not
 primary panic alerts and do not turn the fixture into a malware-like `RED`
 decision.
+
+The runner also writes `artifacts/scenario_runner/offline-apk-analysis.json`.
+That host-side analyzer checks detailed static signals that are intentionally
+outside the no-root on-device MVP, including `network_security_config`,
+`FLAG_SECURE`, `filterTouchesWhenObscured`, and
+`accessibilityDataSensitive` heuristics. Static absence findings are low
+confidence audit signals, not runtime proof.
 
 ## Labelled Metrics
 

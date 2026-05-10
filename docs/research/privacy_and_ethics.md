@@ -11,5 +11,6 @@ Privacy defaults:
 - no external telemetry
 - local-only JSON export
 - test abuse apps must not contain real harmful payloads
+- offline APK analysis is static-only and must not execute third-party APK code
 
 Research outputs should avoid naming vulnerable third-party apps publicly without coordinated disclosure. Defensive-surface findings for real financial, health, government, or identity apps should be aggregated or anonymized unless disclosure permission exists.

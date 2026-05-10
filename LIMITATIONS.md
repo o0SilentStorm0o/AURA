@@ -12,5 +12,6 @@ It does not claim to detect:
 - hidden OEM framework behavior unavailable to third-party apps
 - network payloads without user-visible metadata
 - abuse that leaves no PackageManager, settings, usage, manifest, or snapshot evidence
+- dynamic UI protections that are only applied at runtime and are not visible to static APK heuristics
 
 No-root observability limits are first-class output. Unknown evidence increases uncertainty or abstention; it is not treated as malicious by default.
