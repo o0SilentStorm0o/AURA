@@ -48,6 +48,14 @@ class ScenarioLabel:
     expected_defensive_findings: tuple[str, ...] = ()
 
 
+def is_critical_decision(decision: str | None) -> bool:
+    return decision in {"CRITICAL", "RED"}
+
+
+def is_abstention_decision(decision: str | None) -> bool:
+    return decision in {"GRAY", "ABSTAIN", "UNKNOWN"}
+
+
 def component_permissions(snapshot: dict[str, Any]) -> set[str]:
     return {
         component.get("permission")
@@ -163,6 +171,8 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
         "evaluatedApps": len(rows),
         "labelledApps": len(labels),
         "metrics": compute_metrics(rows),
+        "modelMetrics": compute_model_metrics(rows),
+        "comparisons": compute_comparisons(rows),
         "rows": rows,
     }
 
@@ -243,6 +253,145 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
         "aura_blue_rate": round(aura_blue / len(metric_rows), 4),
         "aura_gray_rate": round(aura_gray / len(metric_rows), 4),
         "metric_population": float(len(metric_rows)),
+    }
+
+
+def row_population(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    labelled = [row for row in rows if "label" in row]
+    return labelled if labelled else rows
+
+
+def baseline_by_model(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        baseline["model"]: baseline
+        for baseline in row.get("baselines", [])
+    }
+
+
+def model_decision(row: dict[str, Any], model: str) -> str | None:
+    if model == "full_aura":
+        return row.get("auraDecision")
+    baseline = baseline_by_model(row).get(model)
+    if baseline is None:
+        return None
+    return baseline.get("decision")
+
+
+def model_names(rows: list[dict[str, Any]]) -> list[str]:
+    names = {
+        baseline["model"]
+        for row in rows
+        for baseline in row.get("baselines", [])
+    }
+    return sorted(names)
+
+
+def compute_model_metrics(rows: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+    metric_rows = row_population(rows)
+    if not metric_rows:
+        return {}
+
+    output: dict[str, dict[str, float]] = {}
+    for model in model_names(metric_rows):
+        alerts = [
+            row
+            for row in metric_rows
+            if is_critical_decision(model_decision(row, model))
+        ]
+        non_actionable = [
+            row
+            for row in metric_rows
+            if row.get("label", {}).get("userActionable") is False
+        ]
+        non_actionable_alerts = [
+            row
+            for row in non_actionable
+            if is_critical_decision(model_decision(row, model))
+        ]
+        actionable_alerts = [
+            row
+            for row in alerts
+            if row.get("label", {}).get("userActionable") is True
+        ]
+        controlled_abuse = [
+            row
+            for row in metric_rows
+            if row.get("label", {}).get("controlledAbuse") is True
+        ]
+        controlled_abuse_alerts = [
+            row
+            for row in controlled_abuse
+            if is_critical_decision(model_decision(row, model))
+        ]
+        platform_audit = [
+            row
+            for row in metric_rows
+            if row.get("label", {}).get("platformAudit") is True
+        ]
+        platform_audit_separated = [
+            row
+            for row in platform_audit
+            if model_decision(row, model) == "BLUE"
+        ]
+        abstention_expected = [
+            row
+            for row in metric_rows
+            if row.get("label", {}).get("abstentionExpected") is True
+        ]
+        abstentions = [
+            row
+            for row in abstention_expected
+            if is_abstention_decision(model_decision(row, model))
+        ]
+
+        output[model] = {
+            "critical_alert_rate": round(len(alerts) / len(metric_rows), 4),
+            "non_actionable_critical_alert_rate": round(
+                len(non_actionable_alerts) / max(1, len(non_actionable)),
+                4,
+            ),
+            "user_actionable_precision": round(
+                len(actionable_alerts) / max(1, len(alerts)),
+                4,
+            ),
+            "controlled_abuse_recall": round(
+                len(controlled_abuse_alerts) / max(1, len(controlled_abuse)),
+                4,
+            ),
+            "platform_audit_separation": round(
+                len(platform_audit_separated) / max(1, len(platform_audit)),
+                4,
+            ),
+            "abstention_correctness": round(
+                len(abstentions) / max(1, len(abstention_expected)),
+                4,
+            ),
+        }
+    return output
+
+
+def compute_comparisons(rows: list[dict[str, Any]]) -> dict[str, float]:
+    metrics = compute_model_metrics(rows)
+    permission = metrics.get("permission_only")
+    full = metrics.get("full_aura")
+    if not permission or not full:
+        return {}
+    return {
+        "aura_non_actionable_critical_alert_rate_reduction_vs_permission_only": round(
+            permission["non_actionable_critical_alert_rate"] -
+            full["non_actionable_critical_alert_rate"],
+            4,
+        ),
+        "aura_user_actionable_precision_delta_vs_permission_only": round(
+            full["user_actionable_precision"] -
+            permission["user_actionable_precision"],
+            4,
+        ),
+        "aura_controlled_abuse_recall_delta_vs_permission_only": round(
+            full["controlled_abuse_recall"] -
+            permission["controlled_abuse_recall"],
+            4,
+        ),
     }
 
 

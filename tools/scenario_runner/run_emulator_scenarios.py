@@ -31,6 +31,7 @@ FIXTURE_PACKAGES = [
     "com.flashlight.cleaner.update",
     "org.fdroid.example.screenreader",
     "com.example.lowriskutility",
+    "com.example.benigncamera",
     "com.example.sensitivebank",
     "com.example.leakybank",
 ]
@@ -81,6 +82,11 @@ EXPECTATIONS = [
         "Declared accessibility tool with assistive label but no active special access",
     ),
     ScenarioExpectation(
+        "com.example.benigncamera",
+        "GREEN",
+        "High-capability camera-shaped fixture should be role-normalized out of the panic queue",
+    ),
+    ScenarioExpectation(
         "com.example.sensitivebank",
         "GREEN",
         "Sensitive app fixture without risky capability should not be an alert",
@@ -124,6 +130,7 @@ def build_all() -> None:
             ":testapps:suspicious-agent:assembleDebug",
             ":testapps:benign-accessibility:assembleDebug",
             ":testapps:lowrisk-utility:assembleDebug",
+            ":testapps:benign-camera:assembleDebug",
             ":testapps:sensitive-bank:assembleDebug",
             ":testapps:leaky-bank:assembleDebug",
         ]
@@ -153,6 +160,7 @@ def install_apps() -> None:
         "testapps/suspicious-agent/build/outputs/apk/debug/suspicious-agent-debug.apk",
         "testapps/benign-accessibility/build/outputs/apk/debug/benign-accessibility-debug.apk",
         "testapps/lowrisk-utility/build/outputs/apk/debug/lowrisk-utility-debug.apk",
+        "testapps/benign-camera/build/outputs/apk/debug/benign-camera-debug.apk",
         "testapps/sensitive-bank/build/outputs/apk/debug/sensitive-bank-debug.apk",
         "testapps/leaky-bank/build/outputs/apk/debug/leaky-bank-debug.apk",
     ]
@@ -476,6 +484,35 @@ def assert_expectations(export_path: Path) -> None:
         raise AssertionError("\n".join(failures))
 
 
+def assert_evaluation_metrics(evaluation_path: Path) -> None:
+    evaluation = json.loads(evaluation_path.read_text())
+    comparisons = evaluation.get("comparisons", {})
+    model_metrics = evaluation.get("modelMetrics", {})
+    failures: list[str] = []
+
+    false_positive_reduction = comparisons.get(
+        "aura_non_actionable_critical_alert_rate_reduction_vs_permission_only",
+        0.0,
+    )
+    precision_delta = comparisons.get(
+        "aura_user_actionable_precision_delta_vs_permission_only",
+        0.0,
+    )
+    if false_positive_reduction <= 0:
+        failures.append(
+            "expected full AURA to reduce non-actionable critical alerts versus permission-only"
+        )
+    if precision_delta <= 0:
+        failures.append(
+            "expected full AURA to improve user-actionable precision versus permission-only"
+        )
+    if model_metrics.get("full_aura", {}).get("controlled_abuse_recall") != 1.0:
+        failures.append("expected full AURA controlled-abuse recall to stay at 1.0")
+
+    if failures:
+        raise AssertionError("\n".join(failures))
+
+
 def capture_logcat() -> None:
     log_path = OUT_DIR / "logcat-tail.txt"
     result = adb("logcat", "-d", "-t", "400", capture=True)
@@ -507,6 +544,7 @@ def main() -> int:
         export_path = run_aura_and_pull_export("aura-last-scan.json", clear_data=False)
         evaluation_path = evaluate(export_path)
         assert_expectations(export_path)
+        assert_evaluation_metrics(evaluation_path)
         capture_logcat()
         print(f"AURA export: {export_path}")
         print(f"Evaluation: {evaluation_path}")

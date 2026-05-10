@@ -27,6 +27,20 @@ python3 tools/evaluator/evaluate.py artifacts/scenario_runner/aura-last-scan.jso
 When labels are present, the main research metrics are computed over the
 labelled population instead of every package visible on the emulator.
 
+The output includes three levels:
+
+- `metrics`: headline AURA metrics used by the scenario runner.
+- `modelMetrics`: per-model rates for permission-only, capability-only,
+  role-aware, role+provenance, temporal, and full AURA.
+- `comparisons`: deltas that quantify how much full AURA changes key metrics
+  versus permission-only.
+
 Labelled defensive-surface expectations are reported with
 `defensive_surface_recall`. These evaluate top-level
 `defensiveSurfaceFindings`, not the primary threat decision.
+
+Evaluator unit tests can be run with:
+
+```bash
+python3 -m unittest tools/evaluator/test_evaluate.py
+```

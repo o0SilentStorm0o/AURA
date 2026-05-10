@@ -16,9 +16,9 @@ This document separates what exists in the current Research MVP from planned wor
 - Private previous-snapshot state saved as `files/state/previous-snapshots.json` for snapshot-diff temporal episodes.
 - On-device defensive surface findings for observable manifest/app metadata: debuggable sensitive apps, backup allowed for sensitive apps, best-effort cleartext traffic allowance, and unprotected exported non-launcher components.
 - Opt-in UsageStats foreground correlation for the `SPECIAL_ACCESS_PLUS_SENSITIVE_APP` temporal episode in `researchFull`; this uses only package-level foreground events, not screen, notification, or network content.
-- Python evaluator scaffold for baselines.
+- Python evaluator for permission-only, capability-only, role-aware, role+provenance, temporal, and full AURA baselines, including per-model metrics and AURA-vs-permission-only comparisons.
 - Unit tests for observability enum contract, actionability enum contract, role/risk/provenance decisions, JSON shape, and temporal TTL behavior.
-- Harmless emulator fixture APKs for suspicious, benign accessibility, low-risk unknown, benign sensitive-app, and leaky defensive-surface scenarios.
+- Harmless emulator fixture APKs for suspicious, benign accessibility, low-risk unknown, benign high-capability camera, benign sensitive-app, and leaky defensive-surface scenarios.
 - ADB scenario runner that installs fixture APKs, performs a two-phase temporal scan, toggles special-access state, runs AURA, pulls local export, evaluates baselines, and asserts expected decisions/evidence/episodes/defensive findings.
 - Research docs for limitations, observability, risk vector, migration, and privacy/ethics.
 
@@ -28,7 +28,7 @@ This document separates what exists in the current Research MVP from planned wor
 - Offline APK analyzer for detailed `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, and `accessibilityDataSensitive`.
 - Asset-driven rules loaded directly from JSON assets; current rules are mirrored in code for the MVP.
 - Human-facing detailed app drill-down with evidence graph and remediation.
-- Expert review labeling workflow for evaluator metrics.
+- Expert review labeling workflow beyond the current controlled-scenario labels.
 - Firmware-scale OEM/preinstall dataset ingestion.
 - Binary Transparency verification.
 - Enterprise/Device Owner mode.

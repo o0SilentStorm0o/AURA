@@ -36,6 +36,10 @@ The suspicious scenario is intentionally two-phase:
   assistive naming, but no active special access in the default scenario.
 - `com.example.lowriskutility`: unknown low-exposure app expected to become
   `GRAY`, not `RED` or `YELLOW`.
+- `com.example.benigncamera`: camera-shaped high-capability app declaring
+  camera, microphone, and location permissions. It is used to verify that a
+  role-normalized model can avoid a non-actionable panic alert that a
+  permission-only baseline would tend to raise.
 - `com.example.sensitivebank`: sensitive-app fixture with `FLAG_SECURE`, used
   as a benign sensitive-app baseline.
 - `com.example.leakybank`: sensitive-app fixture with intentionally weak
@@ -48,6 +52,7 @@ The suspicious scenario is intentionally two-phase:
 - Suspicious agent: `RED`
 - Low-risk unknown utility: `GRAY`
 - Benign accessibility fixture: `GREEN`
+- Benign camera fixture: `GREEN`
 - Sensitive bank fixture: `GREEN`
 - Leaky bank fixture: `GREEN` as a threat decision, with separate defensive
   surface findings.
@@ -98,3 +103,9 @@ to `tools/evaluator/evaluate.py`. This makes controlled metrics explicit:
 These scenarios are not malware. They are controlled capability-shape fixtures
 used to test role normalization, provenance handling, actionability, and
 uncertainty behavior.
+
+The evaluator also writes `modelMetrics` and `comparisons`, which make the
+baseline comparison explicit. In particular, the scenario output can show
+whether full AURA reduces non-actionable critical alerts compared with
+permission-only scoring while preserving recall on the controlled abuse
+fixture.
