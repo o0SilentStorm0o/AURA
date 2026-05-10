@@ -35,11 +35,11 @@
           "accessibility_service": "OBSERVED_DISABLED",
           "notification_listener": "OBSERVED_DISABLED",
           "overlay": "OBSERVED_DISABLED",
-          "request_install_packages": "OBSERVED_DISABLED",
-          "usage_stats": "USER_GRANT_REQUIRED"
+          "request_install_packages": "OBSERVED_DISABLED"
         },
         "rawFeatures": {
-          "sourcePartition": "system_priv_app"
+          "sourcePartition": "system_priv_app",
+          "usageStatsObservability": "USER_GRANT_REQUIRED"
         }
       },
       "evidence": [],

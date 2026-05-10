@@ -65,6 +65,29 @@ class RiskDecisionEngine {
                     explanation = "High capability exposure is paired with concrete abuse evidence, low role legitimacy, active risky capability, and high user actionability.",
                     evidenceIds = listOf(evidence.evidenceId)
                 )
+            harm < 0.20 && snapshot.isSystemApp && abuseEvidence < 0.35 ->
+                AuraDecision(
+                    color = DecisionColor.GREEN,
+                    userAlert = false,
+                    expertFinding = false,
+                    actionabilityClass = actionabilityClass,
+                    title = "Expected low-exposure platform component",
+                    explanation = "This system component has low observed capability exposure and no concrete abuse evidence.",
+                    evidenceIds = listOf(evidence.evidenceId)
+                )
+            harm < 0.30 &&
+                abuseEvidence < 0.35 &&
+                role in setOf(RoleCategory.UNKNOWN_SIDELOAD, RoleCategory.UNKNOWN_UTILITY) &&
+                provenanceClass in setOf(ProvenanceClass.UNKNOWN_SIDELOAD, ProvenanceClass.UNKNOWN) ->
+                AuraDecision(
+                    color = DecisionColor.GRAY,
+                    userAlert = false,
+                    expertFinding = true,
+                    actionabilityClass = actionabilityClass,
+                    title = "Unknown low-exposure app",
+                    explanation = "Unknown provenance without active risky capability or concrete abuse evidence is treated as uncertainty, not maliciousness.",
+                    evidenceIds = listOf(evidence.evidenceId)
+                )
             legitimacy >= 0.70 && provenanceConfidence >= 0.62 && abuseEvidence < 0.35 ->
                 AuraDecision(
                     color = DecisionColor.GREEN,

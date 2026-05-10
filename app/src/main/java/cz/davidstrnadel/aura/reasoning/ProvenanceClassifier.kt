@@ -19,6 +19,8 @@ class ProvenanceClassifier {
         val sourceDir = snapshot.sourceDir.lowercase()
 
         val result = when {
+            (packageName == "android" || packageName.startsWith("android.auto_generated_rro_")) && snapshot.isSystemApp ->
+                Result(ProvenanceClass.AOSP_KNOWN, 0.84, "Android framework/RRO system package provenance signal.")
             packageName.startsWith("com.android.") && snapshot.isSystemApp ->
                 Result(ProvenanceClass.AOSP_KNOWN, 0.82, "AOSP-style system package and system partition signal.")
             packageName.startsWith("com.google.") && snapshot.isSystemApp ->

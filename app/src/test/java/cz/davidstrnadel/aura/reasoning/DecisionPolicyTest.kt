@@ -70,7 +70,7 @@ class DecisionPolicyTest {
 
         val assessment = engine.assess(snapshot)
 
-        assertFalse(assessment.decision.color == DecisionColor.RED)
+        assertEquals(DecisionColor.GRAY, assessment.decision.color)
         assertFalse(assessment.decision.userAlert)
     }
 
@@ -96,5 +96,61 @@ class DecisionPolicyTest {
 
         assertEquals(DecisionColor.RED, assessment.decision.color)
         assertTrue(assessment.decision.userAlert)
+    }
+
+    @Test
+    fun androidFrameworkPackageIsNotTreatedAsAccessibilityTool() {
+        val snapshot = TestSnapshots.app(
+            packageName = "android",
+            appLabel = "Android System",
+            installerPackageName = null,
+            sourceDir = "/system/framework/framework-res.apk",
+            isSystemApp = true,
+            isPrivilegedApp = false,
+            requestedPermissions = listOf("android.permission.READ_PHONE_STATE"),
+            grantedPermissions = listOf("android.permission.READ_PHONE_STATE")
+        )
+
+        val assessment = engine.assess(snapshot)
+
+        assertEquals(DecisionColor.GREEN, assessment.decision.color)
+        assertEquals("SYSTEM_COMPONENT", assessment.role.predicted.name)
+        assertFalse(assessment.decision.userAlert)
+    }
+
+    @Test
+    fun lowExposureRroSystemPackageIsGreenNotYellow() {
+        val snapshot = TestSnapshots.app(
+            packageName = "android.auto_generated_rro_product__",
+            appLabel = "android.auto_generated_rro_product__",
+            installerPackageName = null,
+            sourceDir = "/product/overlay/android.auto_generated_rro_product__.apk",
+            isSystemApp = true,
+            isPrivilegedApp = false
+        )
+
+        val assessment = engine.assess(snapshot)
+
+        assertEquals(DecisionColor.GREEN, assessment.decision.color)
+        assertFalse(assessment.decision.userAlert)
+    }
+
+    @Test
+    fun androidProviderPackageIsSystemComponentNotDialer() {
+        val snapshot = TestSnapshots.app(
+            packageName = "com.android.providers.telephony",
+            appLabel = "Phone and Messaging Storage",
+            installerPackageName = null,
+            sourceDir = "/system/priv-app/TelephonyProvider/TelephonyProvider.apk",
+            isSystemApp = true,
+            isPrivilegedApp = true,
+            requestedPermissions = listOf("android.permission.READ_PHONE_STATE"),
+            grantedPermissions = listOf("android.permission.READ_PHONE_STATE")
+        )
+
+        val assessment = engine.assess(snapshot)
+
+        assertEquals("SYSTEM_COMPONENT", assessment.role.predicted.name)
+        assertFalse(assessment.decision.userAlert)
     }
 }

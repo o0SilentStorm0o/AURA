@@ -92,6 +92,7 @@ class AppSnapshotCollector(private val context: Context) {
                 "capabilityFlavor" to BuildConfig.AURA_CAPABILITY_FLAVOR,
                 "fullInventory" to BuildConfig.AURA_FULL_INVENTORY.toString(),
                 "sourcePartition" to sourcePartition(sourceDir),
+                "usageStatsObservability" to ObservabilityState.USER_GRANT_REQUIRED.name,
                 "requestedPermissionCount" to requested.size.toString(),
                 "grantedPermissionCount" to granted.size.toString(),
                 "componentCount" to components.size.toString(),
@@ -179,12 +180,12 @@ class AppSnapshotCollector(private val context: Context) {
 
         return mapOf(
             "accessibility_service" to when {
-                declaresAccessibility && enabledAccessibility.contains(packageName) -> ObservabilityState.OBSERVED_ENABLED
+                declaresAccessibility && settingContainsPackage(enabledAccessibility, packageName) -> ObservabilityState.OBSERVED_ENABLED
                 declaresAccessibility -> ObservabilityState.OBSERVED_DISABLED
                 else -> ObservabilityState.OBSERVED_DISABLED
             },
             "notification_listener" to when {
-                declaresNotificationListener && enabledNotificationListeners.contains(packageName) -> ObservabilityState.OBSERVED_ENABLED
+                declaresNotificationListener && settingContainsPackage(enabledNotificationListeners, packageName) -> ObservabilityState.OBSERVED_ENABLED
                 declaresNotificationListener -> ObservabilityState.OBSERVED_DISABLED
                 else -> ObservabilityState.OBSERVED_DISABLED
             },
@@ -195,8 +196,7 @@ class AppSnapshotCollector(private val context: Context) {
             "request_install_packages" to when {
                 requestsInstallPackages -> ObservabilityState.DECLARED_ONLY
                 else -> ObservabilityState.OBSERVED_DISABLED
-            },
-            "usage_stats" to ObservabilityState.USER_GRANT_REQUIRED
+            }
         )
     }
 
@@ -238,6 +238,12 @@ class AppSnapshotCollector(private val context: Context) {
         sourceDir.startsWith("/data/app") -> "data_app"
         else -> "unknown"
     }
+
+    private fun settingContainsPackage(setting: String, packageName: String): Boolean =
+        setting.split(':').any { entry ->
+            val componentPackage = entry.substringBefore('/')
+            componentPackage == packageName
+        }
 
     companion object {
         private const val FLAG_PRIVILEGED_COMPAT = 1 shl 30

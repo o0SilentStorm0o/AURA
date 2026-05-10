@@ -43,3 +43,4 @@ See:
 - [privacy_and_ethics.md](docs/research/privacy_and_ethics.md)
 - [observability_matrix.md](docs/research/observability_matrix.md)
 - [risk_vector_model.md](docs/research/risk_vector_model.md)
+- [development_status.md](docs/research/development_status.md)

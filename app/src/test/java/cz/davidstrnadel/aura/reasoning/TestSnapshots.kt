@@ -53,7 +53,6 @@ object TestSnapshots {
         "accessibility_service" to ObservabilityState.OBSERVED_DISABLED,
         "notification_listener" to ObservabilityState.OBSERVED_DISABLED,
         "overlay" to ObservabilityState.OBSERVED_DISABLED,
-        "request_install_packages" to ObservabilityState.OBSERVED_DISABLED,
-        "usage_stats" to ObservabilityState.USER_GRANT_REQUIRED
+        "request_install_packages" to ObservabilityState.OBSERVED_DISABLED
     )
 }

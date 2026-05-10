@@ -2,6 +2,8 @@ package cz.davidstrnadel.aura.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -90,6 +92,14 @@ fun AuraAppScreen(viewModel: AuraViewModel = viewModel()) {
                         }
                         item {
                             Spacer(Modifier.height(12.dp))
+                            if (state.exportPath.isNotBlank()) {
+                                Text(
+                                    text = "Last local export: ${state.exportPath}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
                             Text("JSON export preview", style = MaterialTheme.typography.titleSmall)
                             Surface(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -111,11 +121,13 @@ fun AuraAppScreen(viewModel: AuraViewModel = viewModel()) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SummaryRow(state: AuraUiState) {
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         AssistChip(onClick = {}, label = { Text("RED ${state.redCount}") })
         AssistChip(onClick = {}, label = { Text("BLUE ${state.blueCount}") })

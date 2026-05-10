@@ -27,13 +27,35 @@ class RoleInferenceEngine {
             candidates += Candidate(role, confidence, reason, raw)
         }
 
+        if (packageName == "android" || packageName.startsWith("android.auto_generated_rro_")) {
+            addCandidate(
+                RoleCategory.SYSTEM_COMPONENT,
+                0.84,
+                "Framework/RRO package is treated as a platform component, not a user-facing accessibility tool.",
+                "platform-framework-or-rro"
+            )
+        }
+        if (snapshot.isSystemApp && packageName.startsWith("com.android.providers.media")) {
+            addCandidate(RoleCategory.MEDIA_PROVIDER, 0.84, "AOSP media provider package signal.", "media-provider")
+        }
+        if (snapshot.isSystemApp && packageName.startsWith("com.android.providers.contacts")) {
+            addCandidate(RoleCategory.CONTACTS_PROVIDER, 0.84, "AOSP contacts provider package signal.", "contacts-provider")
+        }
+        if (snapshot.isSystemApp && packageName.startsWith("com.android.providers.")) {
+            addCandidate(RoleCategory.SYSTEM_COMPONENT, 0.80, "AOSP provider package is treated as a platform component.", "android-provider")
+        }
+
         if ("CAMERA" in permissions || "camera" in packageName || "camera" in label) {
             addCandidate(RoleCategory.CAMERA, 0.86, "Camera capability and naming match a camera role.", "camera-signals")
         }
         if ("ACCESS_FINE_LOCATION" in permissions && listOf("map", "maps", "navigation", "nav").any { it in packageName || it in label }) {
             addCandidate(RoleCategory.MAPS_NAVIGATION, 0.82, "Location capability fits a maps/navigation role.", "maps-signals")
         }
-        if ("android.permission.BIND_ACCESSIBILITY_SERVICE".lowercase() in componentNames) {
+        if (
+            "android.permission.BIND_ACCESSIBILITY_SERVICE".lowercase() in componentNames &&
+            packageName != "android" &&
+            !packageName.startsWith("android.auto_generated_rro_")
+        ) {
             addCandidate(RoleCategory.ACCESSIBILITY_TOOL, 0.78, "Manifest declares an Accessibility service.", "accessibility-service")
         }
         if ("android.view.InputMethod".lowercase() in componentNames || "bind_input_method" in componentNames) {
@@ -45,7 +67,9 @@ class RoleInferenceEngine {
         if (listOf("browser", "chrome", "webview").any { it in packageName || it in label }) {
             addCandidate(RoleCategory.BROWSER, 0.76, "Browser/WebView naming signals are present.", "browser-signals")
         }
-        if (listOf("dialer", "phone").any { it in packageName || it in label } || "CALL_PHONE" in permissions) {
+        if (!packageName.startsWith("com.android.providers.") &&
+            (listOf("dialer", "phone").any { it in packageName || it in label } || "CALL_PHONE" in permissions)
+        ) {
             addCandidate(RoleCategory.DIALER, 0.72, "Dialer/phone permission or naming signals are present.", "dialer-signals")
         }
         if (listOf("bank", "pay", "wallet").any { it in packageName || it in label }) {
