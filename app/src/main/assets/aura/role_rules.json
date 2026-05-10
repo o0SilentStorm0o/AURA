@@ -3,19 +3,37 @@
   "rules": [
     {
       "role": "CAMERA",
-      "signals": ["android.permission.CAMERA", "camera package or label"]
+      "confidence": 0.86,
+      "permissions": ["android.permission.CAMERA"],
+      "packageOrLabelMarkers": ["camera"]
+    },
+    {
+      "role": "MAPS_NAVIGATION",
+      "confidence": 0.82,
+      "permissions": ["android.permission.ACCESS_FINE_LOCATION"],
+      "packageOrLabelMarkers": ["map", "maps", "navigation", "nav"]
     },
     {
       "role": "ACCESSIBILITY_TOOL",
-      "signals": ["android.permission.BIND_ACCESSIBILITY_SERVICE service declaration"]
+      "confidence": 0.78,
+      "componentMarkers": ["android.permission.BIND_ACCESSIBILITY_SERVICE"],
+      "packageOrLabelMarkers": ["accessibility", "screenreader", "screen reader", "talkback", "assistive", "reader"]
     },
     {
       "role": "KEYBOARD",
-      "signals": ["android.permission.BIND_INPUT_METHOD service declaration"]
+      "confidence": 0.82,
+      "componentMarkers": ["android.view.InputMethod", "bind_input_method"]
     },
     {
       "role": "VPN_SECURITY_APP",
-      "signals": ["VpnService component or security naming"]
+      "confidence": 0.72,
+      "componentMarkers": ["vpnservice"],
+      "packageOrLabelMarkers": ["vpn", "security"]
+    },
+    {
+      "role": "PAYMENT_BANKING",
+      "confidence": 0.72,
+      "packageOrLabelMarkers": ["bank", "pay", "wallet"]
     }
   ]
 }

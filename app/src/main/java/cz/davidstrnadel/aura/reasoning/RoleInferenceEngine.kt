@@ -12,7 +12,9 @@ data class RoleInferenceResult(
     val evidence: List<EvidenceItem>
 )
 
-class RoleInferenceEngine {
+class RoleInferenceEngine(
+    private val assets: AuraRuleAssets = AuraRuleAssets()
+) {
     fun infer(snapshot: ObservedAppSnapshot): RoleInferenceResult {
         val packageName = snapshot.packageName.lowercase()
         val label = snapshot.appLabel.lowercase()
@@ -25,6 +27,26 @@ class RoleInferenceEngine {
 
         fun addCandidate(role: RoleCategory, confidence: Double, reason: String, raw: String) {
             candidates += Candidate(role, confidence, reason, raw)
+        }
+
+        assets.roleRules.forEach { rule ->
+            val role = runCatching { RoleCategory.valueOf(rule.role) }.getOrNull() ?: return@forEach
+            val permissionMatch = rule.permissions.isEmpty() ||
+                rule.permissions.any { expected ->
+                    expected in snapshot.requestedPermissions || expected.substringAfterLast('.') in permissions
+                }
+            val markerMatch = rule.packageOrLabelMarkers.isEmpty() ||
+                rule.packageOrLabelMarkers.any { it.lowercase() in packageName || it.lowercase() in label }
+            val componentMatch = rule.componentMarkers.isEmpty() ||
+                rule.componentMarkers.any { it.lowercase() in componentNames }
+            if (permissionMatch && markerMatch && componentMatch) {
+                addCandidate(
+                    role,
+                    rule.confidence,
+                    "Asset role rule matched ${rule.role}.",
+                    "asset-role-rule:${rule.role}"
+                )
+            }
         }
 
         if (packageName == "android" || packageName.startsWith("android.auto_generated_rro_")) {

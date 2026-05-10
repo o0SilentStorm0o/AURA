@@ -28,4 +28,13 @@ class AuraAssessmentEngine(
             decision = risk.decision
         )
     }
+
+    companion object {
+        fun fromAssets(assets: AuraRuleAssets): AuraAssessmentEngine =
+            AuraAssessmentEngine(
+                roleInferenceEngine = RoleInferenceEngine(assets),
+                provenanceClassifier = ProvenanceClassifier(assets),
+                riskDecisionEngine = RiskDecisionEngine(assets)
+            )
+    }
 }

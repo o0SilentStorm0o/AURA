@@ -3,6 +3,7 @@ package cz.davidstrnadel.aura.export
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
 import cz.davidstrnadel.aura.reasoning.DefensiveSurfaceAuditor
 import cz.davidstrnadel.aura.reasoning.TestSnapshots
+import cz.davidstrnadel.aura.storage.ScanHistoryReport
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -27,7 +28,16 @@ class AuraJsonExporterTest {
             flavor = "researchFull/standard",
             assessments = listOf(assessment),
             temporalEpisodes = emptyList(),
-            defensiveSurfaceFindings = defensiveFindings
+            defensiveSurfaceFindings = defensiveFindings,
+            scanHistory = ScanHistoryReport(
+                schemaVersion = 1,
+                retainedScanCount = 1,
+                retainedPackageCount = 1,
+                scans = emptyList(),
+                packagesChangedSincePreviousScan = emptyList(),
+                packagesNewInThisScan = listOf("com.android.camera"),
+                packagesRemovedSincePreviousScan = emptyList()
+            )
         )
 
         val json = AuraJsonExporter().toJson(export)
@@ -37,5 +47,7 @@ class AuraJsonExporterTest {
         assertTrue(json.contains("\"riskVector\""))
         assertTrue(json.contains("\"decision\""))
         assertTrue(json.contains("\"defensiveSurfaceFindings\""))
+        assertTrue(json.contains("\"scanHistory\""))
+        assertTrue(json.contains("\"packagesNewInThisScan\""))
     }
 }

@@ -36,6 +36,10 @@ FIXTURE_PACKAGES = [
     "com.example.sensitivebank",
     "com.example.leakybank",
 ]
+OPTIONAL_PLATFORM_AUDIT_PACKAGES = {
+    "com.android.providers.contacts": "AOSP contacts provider with privileged/contact exposure is a BLUE platform audit item, not a user panic alert.",
+    "com.android.server.telecom": "AOSP telecom service with phone/call exposure is a BLUE platform audit item, not a user panic alert.",
+}
 
 
 @dataclass(frozen=True)
@@ -361,7 +365,25 @@ def is_valid_export(payload: str) -> bool:
     return isinstance(parsed.get("assessments"), list) and isinstance(parsed.get("scanId"), str)
 
 
-def write_labels() -> Path:
+def write_labels(export_path: Path) -> Path:
+    export = json.loads(export_path.read_text())
+    present_packages = {
+        assessment["snapshot"]["packageName"]
+        for assessment in export.get("assessments", [])
+    }
+    optional_platform_labels = [
+        {
+            "packageName": package_name,
+            "expectedDecision": "BLUE",
+            "controlledAbuse": False,
+            "userActionable": False,
+            "platformAudit": True,
+            "abstentionExpected": False,
+            "expectedDefensiveFindings": [],
+        }
+        for package_name in sorted(OPTIONAL_PLATFORM_AUDIT_PACKAGES)
+        if package_name in present_packages
+    ]
     labels_path = OUT_DIR / "scenario-labels.json"
     labels_path.write_text(
         json.dumps(
@@ -378,7 +400,8 @@ def write_labels() -> Path:
                         "expectedDefensiveFindings": expectation.expected_defensive_findings or [],
                     }
                     for expectation in EXPECTATIONS
-                ],
+                ]
+                + optional_platform_labels,
             },
             indent=2,
             sort_keys=True,
@@ -390,7 +413,7 @@ def write_labels() -> Path:
 
 def evaluate(export_path: Path) -> Path:
     output_path = OUT_DIR / "evaluation.json"
-    labels_path = write_labels()
+    labels_path = write_labels(export_path)
     run(
         [
             "python3",
@@ -533,6 +556,17 @@ def assert_expectations(export_path: Path) -> None:
                         f"observed {sorted(actual_defensive)}"
                     )
 
+    for package_name, description in OPTIONAL_PLATFORM_AUDIT_PACKAGES.items():
+        assessment = by_package.get(package_name)
+        if assessment is None:
+            continue
+        actual = assessment["decision"]["color"]
+        print(f"{package_name}: {actual} / optional platform audit :: {description}")
+        if actual != "BLUE":
+            failures.append(f"{package_name}: expected optional platform audit BLUE, got {actual}")
+        if assessment["decision"].get("userAlert") is not False:
+            failures.append(f"{package_name}: BLUE platform audit must not be a user alert")
+
     if failures:
         raise AssertionError("\n".join(failures))
 
@@ -561,6 +595,12 @@ def assert_evaluation_metrics(evaluation_path: Path) -> None:
         )
     if model_metrics.get("full_aura", {}).get("controlled_abuse_recall") != 1.0:
         failures.append("expected full AURA controlled-abuse recall to stay at 1.0")
+    has_platform_audit_labels = any(
+        row.get("label", {}).get("platformAudit") is True
+        for row in evaluation.get("rows", [])
+    )
+    if has_platform_audit_labels and model_metrics.get("full_aura", {}).get("platform_audit_separation") != 1.0:
+        failures.append("expected full AURA BLUE platform-audit separation to stay at 1.0")
 
     if failures:
         raise AssertionError("\n".join(failures))

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "labels": [
+    {
+      "packageName": "com.example.app",
+      "expectedDecision": "RED",
+      "controlledAbuse": true,
+      "userActionable": true,
+      "platformAudit": false,
+      "abstentionExpected": false,
+      "expectedDefensiveFindings": []
+    }
+  ]
+}

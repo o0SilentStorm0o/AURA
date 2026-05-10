@@ -9,9 +9,14 @@
     "android.permission.RECORD_AUDIO": 0.76,
     "android.permission.CAMERA": 0.68,
     "android.permission.ACCESS_FINE_LOCATION": 0.72,
+    "android.permission.ACCESS_COARSE_LOCATION": 0.52,
     "android.permission.READ_SMS": 0.82,
     "android.permission.SEND_SMS": 0.88,
+    "android.permission.RECEIVE_SMS": 0.74,
     "android.permission.READ_CONTACTS": 0.64,
+    "android.permission.READ_CALL_LOG": 0.76,
+    "android.permission.CALL_PHONE": 0.68,
+    "android.permission.READ_PHONE_STATE": 0.62,
     "android.permission.RECEIVE_BOOT_COMPLETED": 0.45
   }
 }

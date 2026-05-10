@@ -19,7 +19,9 @@ data class RiskDecisionResult(
     val evidence: List<EvidenceItem>
 )
 
-class RiskDecisionEngine {
+class RiskDecisionEngine(
+    private val assets: AuraRuleAssets = AuraRuleAssets()
+) {
     fun decide(
         snapshot: ObservedAppSnapshot,
         role: RoleCategory,
@@ -137,8 +139,8 @@ class RiskDecisionEngine {
     }
 
     private fun harmPotential(snapshot: ObservedAppSnapshot): Double {
-        val permissionScore = snapshot.requestedPermissions.maxOfOrNull { permissionHarm[it] ?: 0.0 } ?: 0.0
-        val grantedBoost = if (snapshot.grantedPermissions.any { (permissionHarm[it] ?: 0.0) >= 0.75 }) 0.10 else 0.0
+        val permissionScore = snapshot.requestedPermissions.maxOfOrNull { assets.permissionHarm[it] ?: 0.0 } ?: 0.0
+        val grantedBoost = if (snapshot.grantedPermissions.any { (assets.permissionHarm[it] ?: 0.0) >= 0.75 }) 0.10 else 0.0
         val specialBoost = if (hasActiveRiskyCapability(snapshot)) 0.25 else 0.0
         val persistenceBoost = if (snapshot.requestedPermissions.any { it.endsWith("RECEIVE_BOOT_COMPLETED") }) 0.10 else 0.0
         return max(permissionScore, specialBoost + persistenceBoost + grantedBoost).clampedScore()
@@ -206,7 +208,7 @@ class RiskDecisionEngine {
     private fun actionability(snapshot: ObservedAppSnapshot): ActionabilityClass = when {
         snapshot.specialAccess.values.any { it == ObservabilityState.OBSERVED_ENABLED } ->
             ActionabilityClass.USER_CAN_DISABLE_SPECIAL_ACCESS
-        snapshot.grantedPermissions.any { permissionHarm.containsKey(it) } && !snapshot.isSystemApp ->
+        snapshot.grantedPermissions.any { assets.permissionHarm.containsKey(it) } && !snapshot.isSystemApp ->
             ActionabilityClass.USER_CAN_REVOKE_PERMISSION
         !snapshot.isSystemApp ->
             ActionabilityClass.USER_CAN_UNINSTALL
@@ -242,23 +244,6 @@ class RiskDecisionEngine {
             ProvenanceClass.THIRD_PARTY_PREINSTALL
         )
 
-        val permissionHarm = mapOf(
-            "android.permission.CAMERA" to 0.68,
-            "android.permission.RECORD_AUDIO" to 0.76,
-            "android.permission.ACCESS_FINE_LOCATION" to 0.72,
-            "android.permission.ACCESS_COARSE_LOCATION" to 0.52,
-            "android.permission.READ_SMS" to 0.82,
-            "android.permission.SEND_SMS" to 0.88,
-            "android.permission.RECEIVE_SMS" to 0.74,
-            "android.permission.READ_CONTACTS" to 0.64,
-            "android.permission.READ_CALL_LOG" to 0.76,
-            "android.permission.CALL_PHONE" to 0.68,
-            "android.permission.READ_PHONE_STATE" to 0.62,
-            "android.permission.REQUEST_INSTALL_PACKAGES" to 0.70,
-            "android.permission.RECEIVE_BOOT_COMPLETED" to 0.45,
-            "android.permission.SYSTEM_ALERT_WINDOW" to 0.78,
-            "android.permission.BIND_ACCESSIBILITY_SERVICE" to 0.90,
-            "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" to 0.82
-        )
+        val permissionHarm = AuraRuleAssets.DEFAULT_PERMISSION_HARM
     }
 }
