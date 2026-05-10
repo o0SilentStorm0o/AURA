@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "description": "OEM package-name patterns used only to support opaque/system provenance confidence.",
+  "patterns": [
+    "com.samsung.",
+    "com.miui.",
+    "com.xiaomi.",
+    "com.huawei.",
+    "com.oppo.",
+    "com.vivo.",
+    "com.motorola.",
+    "com.sonyericsson.",
+    "com.oneplus."
+  ]
+}

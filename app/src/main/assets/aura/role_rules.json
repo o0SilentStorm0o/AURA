@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "role": "CAMERA",
+      "signals": ["android.permission.CAMERA", "camera package or label"]
+    },
+    {
+      "role": "ACCESSIBILITY_TOOL",
+      "signals": ["android.permission.BIND_ACCESSIBILITY_SERVICE service declaration"]
+    },
+    {
+      "role": "KEYBOARD",
+      "signals": ["android.permission.BIND_INPUT_METHOD service declaration"]
+    },
+    {
+      "role": "VPN_SECURITY_APP",
+      "signals": ["VpnService component or security naming"]
+    }
+  ]
+}

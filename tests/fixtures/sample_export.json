@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "scanId": "fixture-scan",
+  "generatedAt": 1710000000000,
+  "flavor": "researchFull/standard",
+  "assessments": [
+    {
+      "snapshot": {
+        "snapshotId": "camera-snapshot",
+        "scanId": "fixture-scan",
+        "collectedAt": 1710000000000,
+        "apiLevel": 35,
+        "androidVersion": "15",
+        "securityPatchLevel": "2026-05-01",
+        "collectorVersion": "aura-collector-0.1.0",
+        "flavor": "researchFull/standard",
+        "deviceModel": "fixture device",
+        "packageName": "com.android.camera",
+        "appLabel": "Camera",
+        "versionName": "1",
+        "versionCode": 1,
+        "uid": 1000,
+        "firstInstallTime": 1700000000000,
+        "lastUpdateTime": 1700000000000,
+        "installerPackageName": null,
+        "sourceDir": "/system/priv-app/Camera/Camera.apk",
+        "isSystemApp": true,
+        "isPrivilegedApp": true,
+        "isUpdatedSystemApp": false,
+        "requestedPermissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
+        "grantedPermissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
+        "signingCertDigestsSha256": ["fixture"],
+        "components": [],
+        "specialAccess": {
+          "accessibility_service": "OBSERVED_DISABLED",
+          "notification_listener": "OBSERVED_DISABLED",
+          "overlay": "OBSERVED_DISABLED",
+          "request_install_packages": "OBSERVED_DISABLED",
+          "usage_stats": "USER_GRANT_REQUIRED"
+        },
+        "rawFeatures": {
+          "sourcePartition": "system_priv_app"
+        }
+      },
+      "evidence": [],
+      "role": {
+        "predicted": "CAMERA",
+        "confidence": 0.86,
+        "evidenceIds": [],
+        "explanation": "Camera role"
+      },
+      "provenance": {
+        "provenanceClass": "AOSP_KNOWN",
+        "confidence": 0.82,
+        "evidenceIds": [],
+        "explanation": "AOSP system"
+      },
+      "riskVector": {
+        "harm": 0.76,
+        "legitimacy": 0.86,
+        "abuseEvidence": 0.12,
+        "provenanceConfidence": 0.82,
+        "actionability": 0.18,
+        "uncertainty": 0.2
+      },
+      "decision": {
+        "color": "GREEN",
+        "userAlert": false,
+        "expertFinding": false,
+        "actionabilityClass": "OEM_OR_PLATFORM_ONLY",
+        "title": "Expected for role",
+        "explanation": "Expected camera component",
+        "evidenceIds": []
+      }
+    }
+  ],
+  "temporalEpisodes": []
+}

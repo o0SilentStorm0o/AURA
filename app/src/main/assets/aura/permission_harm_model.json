@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "description": "Capability exposure priors. These are not malware decisions.",
+  "permissions": {
+    "android.permission.BIND_ACCESSIBILITY_SERVICE": 0.90,
+    "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE": 0.82,
+    "android.permission.SYSTEM_ALERT_WINDOW": 0.78,
+    "android.permission.REQUEST_INSTALL_PACKAGES": 0.70,
+    "android.permission.RECORD_AUDIO": 0.76,
+    "android.permission.CAMERA": 0.68,
+    "android.permission.ACCESS_FINE_LOCATION": 0.72,
+    "android.permission.READ_SMS": 0.82,
+    "android.permission.SEND_SMS": 0.88,
+    "android.permission.READ_CONTACTS": 0.64,
+    "android.permission.RECEIVE_BOOT_COMPLETED": 0.45
+  }
+}

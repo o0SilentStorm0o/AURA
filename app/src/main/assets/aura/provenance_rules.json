@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "rules": [
+    {
+      "class": "PLAY_INSTALLED",
+      "signal": "installerPackageName == com.android.vending"
+    },
+    {
+      "class": "FDROID_OR_OPEN_SOURCE",
+      "signal": "installerPackageName contains fdroid"
+    },
+    {
+      "class": "OPAQUE_PRIVILEGED",
+      "signal": "priv-app source path without transparency evidence"
+    },
+    {
+      "class": "UNKNOWN_SIDELOAD",
+      "signal": "non-system app with no installer package"
+    }
+  ]
+}

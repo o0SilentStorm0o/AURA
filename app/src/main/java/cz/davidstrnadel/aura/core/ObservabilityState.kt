@@ -1,0 +1,14 @@
+package cz.davidstrnadel.aura.core
+
+enum class ObservabilityState {
+    OBSERVED_ENABLED,
+    OBSERVED_DISABLED,
+    DECLARED_ONLY,
+    USER_GRANT_REQUIRED,
+    REQUIRES_RESEARCH_FLAVOR,
+    ADB_ONLY,
+    DEVICE_OWNER_ONLY,
+    ROOT_OR_OEM_ONLY,
+    NOT_OBSERVABLE,
+    UNKNOWN_API_LIMITATION
+}

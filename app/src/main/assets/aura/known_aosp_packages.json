@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "description": "Known AOSP package identities used as provenance evidence, never as a whitelist.",
+  "packages": [
+    "android",
+    "com.android.camera",
+    "com.android.contacts",
+    "com.android.dialer",
+    "com.android.launcher3",
+    "com.android.packageinstaller",
+    "com.android.providers.media",
+    "com.android.settings",
+    "com.android.systemui"
+  ]
+}

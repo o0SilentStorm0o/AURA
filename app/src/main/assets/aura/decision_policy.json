@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "RED": "high harm + high abuse evidence + low role legitimacy + active risky capability + high user actionability",
+    "BLUE": "platform/OEM/security research audit finding; never primary panic queue",
+    "GRAY": "insufficient evidence or high uncertainty without abuse evidence",
+    "GREEN": "expected for role with sufficient provenance confidence and low abuse evidence",
+    "YELLOW": "review recommended, not panic"
+  }
+}

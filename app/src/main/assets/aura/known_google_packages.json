@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "description": "Known Google package identities used as provenance evidence, never as a whitelist.",
+  "packages": [
+    "com.android.chrome",
+    "com.google.android.apps.maps",
+    "com.google.android.apps.messaging",
+    "com.google.android.apps.photos",
+    "com.google.android.gms",
+    "com.google.android.googlequicksearchbox",
+    "com.google.android.inputmethod.latin",
+    "com.google.android.webview"
+  ]
+}

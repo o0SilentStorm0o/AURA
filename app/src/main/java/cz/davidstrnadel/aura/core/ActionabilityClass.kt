@@ -1,0 +1,11 @@
+package cz.davidstrnadel.aura.core
+
+enum class ActionabilityClass {
+    USER_CAN_REVOKE_PERMISSION,
+    USER_CAN_DISABLE_SPECIAL_ACCESS,
+    USER_CAN_UNINSTALL,
+    USER_CAN_ONLY_REVIEW,
+    OEM_OR_PLATFORM_ONLY,
+    REQUIRES_ENTERPRISE_ADMIN,
+    NOT_ACTIONABLE
+}
