@@ -30,10 +30,13 @@ This document separates what exists in the current Research MVP from planned wor
 - Expert-label validation tooling, firmware APK inventory tooling, and explicit
   integration-boundary docs for Binary Transparency, enterprise Device Owner,
   and lab Accessibility observer work.
+- Research-console UI with decision counts, scan-history summary, selectable app
+  detail, risk-vector bars, actionability/provenance/role fields, first-class
+  evidence items, and per-app defensive findings.
 
 ## Not Yet Implemented
 
-- Human-facing detailed app drill-down with evidence graph and remediation.
+- Human-facing remediation text and richer evidence graph visualization.
 - Full expert review workflow beyond schema validation and controlled-scenario labels.
 - Firmware-scale OEM/preinstall analysis beyond safe APK inventory collection.
 - Binary Transparency verification.

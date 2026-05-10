@@ -1,7 +1,9 @@
 package cz.davidstrnadel.aura.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.AssistChip
@@ -20,26 +23,46 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cz.davidstrnadel.aura.core.AuraAssessment
+import cz.davidstrnadel.aura.core.DecisionColor
+import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
+import cz.davidstrnadel.aura.core.EvidenceItem
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuraAppScreen(viewModel: AuraViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+    var selectedPackage by remember { mutableStateOf<String?>(null) }
+    val selectedAssessment = remember(state.assessments, selectedPackage) {
+        state.assessments.firstOrNull { it.snapshot.packageName == selectedPackage }
+            ?: state.assessments.firstOrNull()
+    }
+
+    LaunchedEffect(state.scanId) {
+        selectedPackage = null
+    }
 
     Scaffold(
         topBar = {
@@ -60,64 +83,48 @@ fun AuraAppScreen(viewModel: AuraViewModel = viewModel()) {
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Role-normalized no-root assessment",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "RED is user-actionable. BLUE is expert/platform audit relevance.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(Modifier.height(16.dp))
-
             when {
-                state.loading -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-                state.error != null -> {
-                    Text("Scan failed: ${state.error}", color = MaterialTheme.colorScheme.error)
-                }
+                state.loading -> LoadingState()
+                state.error != null -> Text("Scan failed: ${state.error}", color = MaterialTheme.colorScheme.error)
                 else -> {
                     SummaryRow(state)
-                    Spacer(Modifier.height(16.dp))
+                    ScanHistoryRow(state)
+                    Spacer(Modifier.height(12.dp))
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.assessments.take(30), key = { it.snapshot.packageName }) { assessment ->
-                            AssessmentRow(assessment)
+                        item {
+                            selectedAssessment?.let { assessment ->
+                                AppDetailPanel(
+                                    assessment = assessment,
+                                    findings = state.defensiveSurfaceFindings.filter {
+                                        it.packageName == assessment.snapshot.packageName
+                                    }
+                                )
+                            }
+                        }
+                        items(state.assessments.take(40), key = { it.snapshot.packageName }) { assessment ->
+                            AssessmentRow(
+                                assessment = assessment,
+                                selected = assessment.snapshot.packageName == selectedAssessment?.snapshot?.packageName,
+                                onClick = { selectedPackage = assessment.snapshot.packageName }
+                            )
                         }
                         item {
-                            Spacer(Modifier.height(12.dp))
-                            if (state.exportPath.isNotBlank()) {
-                                Text(
-                                    text = "Last local export: ${state.exportPath}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Spacer(Modifier.height(8.dp))
-                            }
-                            Text("JSON export preview", style = MaterialTheme.typography.titleSmall)
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = MaterialTheme.shapes.small,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = state.exportPreview,
-                                    modifier = Modifier.padding(12.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
+                            ExportPanel(state)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LoadingState() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator()
     }
 }
 
@@ -129,25 +136,63 @@ private fun SummaryRow(state: AuraUiState) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        AssistChip(onClick = {}, label = { Text("RED ${state.redCount}") })
-        AssistChip(onClick = {}, label = { Text("BLUE ${state.blueCount}") })
-        AssistChip(onClick = {}, label = { Text("GRAY ${state.grayCount}") })
-        AssistChip(onClick = {}, label = { Text("YELLOW ${state.yellowCount}") })
-        AssistChip(onClick = {}, label = { Text("GREEN ${state.greenCount}") })
+        CountChip("RED", state.redCount, DecisionColor.RED)
+        CountChip("YELLOW", state.yellowCount, DecisionColor.YELLOW)
+        CountChip("BLUE", state.blueCount, DecisionColor.BLUE)
+        CountChip("GRAY", state.grayCount, DecisionColor.GRAY)
+        CountChip("GREEN", state.greenCount, DecisionColor.GREEN)
         AssistChip(onClick = {}, label = { Text("DEF ${state.defensiveFindingCount}") })
+        AssistChip(onClick = {}, label = { Text("PKG ${state.assessments.size}") })
     }
 }
 
 @Composable
-private fun AssessmentRow(assessment: AuraAssessment) {
+private fun CountChip(label: String, count: Int, color: DecisionColor) {
+    AssistChip(
+        onClick = {},
+        label = { Text("$label $count") },
+        leadingIcon = {
+            Icon(
+                Icons.Default.Science,
+                contentDescription = null,
+                tint = decisionTint(color)
+            )
+        }
+    )
+}
+
+@Composable
+private fun ScanHistoryRow(state: AuraUiState) {
+    val history = state.scanHistory ?: return
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "history scans=${history.retainedScanCount} packages=${history.retainedPackageCount} changed=${history.packagesChangedSincePreviousScan.size} new=${history.packagesNewInThisScan.size} removed=${history.packagesRemovedSincePreviousScan.size}",
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace
+    )
+}
+
+@Composable
+private fun AssessmentRow(
+    assessment: AuraAssessment,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
     Surface(
-        tonalElevation = 1.dp,
+        tonalElevation = if (selected) 3.dp else 1.dp,
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.fillMaxWidth()
+        color = if (selected) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Science, contentDescription = null)
+                Icon(Icons.Default.Science, contentDescription = null, tint = decisionTint(assessment.decision.color))
                 Text(
                     text = assessment.decision.color.name,
                     modifier = Modifier.padding(start = 8.dp),
@@ -155,19 +200,214 @@ private fun AssessmentRow(assessment: AuraAssessment) {
                 )
                 Text(
                     text = " ${assessment.decision.title}",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(assessment.snapshot.appLabel.ifBlank { assessment.snapshot.packageName })
+            Text(
+                text = assessment.snapshot.appLabel.ifBlank { assessment.snapshot.packageName },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 text = assessment.snapshot.packageName,
                 style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "role=${assessment.role.predicted} provenance=${assessment.provenance.provenanceClass}",
-                style = MaterialTheme.typography.bodySmall
+                text = "role=${assessment.role.predicted} provenance=${assessment.provenance.provenanceClass} action=${assessment.decision.actionabilityClass}",
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
+}
+
+@Composable
+private fun AppDetailPanel(
+    assessment: AuraAssessment,
+    findings: List<DefensiveSurfaceFinding>
+) {
+    SectionSurface {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Info, contentDescription = null)
+            Text(
+                text = "Selected app",
+                modifier = Modifier.padding(start = 8.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        KeyValue("package", assessment.snapshot.packageName)
+        KeyValue("decision", "${assessment.decision.color} / ${assessment.decision.title}")
+        KeyValue("userAlert", assessment.decision.userAlert.toString())
+        KeyValue("expertFinding", assessment.decision.expertFinding.toString())
+        KeyValue("role", "${assessment.role.predicted} (${scoreText(assessment.role.confidence)})")
+        KeyValue("provenance", "${assessment.provenance.provenanceClass} (${scoreText(assessment.provenance.confidence)})")
+        KeyValue("actionability", assessment.decision.actionabilityClass.name)
+        KeyValue("installer", assessment.snapshot.installerPackageName ?: "none")
+        KeyValue("source", assessment.snapshot.rawFeatures["sourcePartition"] ?: assessment.snapshot.sourceDir)
+        Spacer(Modifier.height(12.dp))
+        RiskVectorBars(assessment)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = assessment.decision.explanation,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        EvidenceList(assessment.evidence)
+        DefensiveFindingsList(findings)
+    }
+}
+
+@Composable
+private fun RiskVectorBars(assessment: AuraAssessment) {
+    Text("Risk vector", style = MaterialTheme.typography.titleSmall)
+    ScoreBar("harm", assessment.riskVector.harm)
+    ScoreBar("legitimacy", assessment.riskVector.legitimacy)
+    ScoreBar("abuse", assessment.riskVector.abuseEvidence)
+    ScoreBar("provenance", assessment.riskVector.provenanceConfidence)
+    ScoreBar("actionability", assessment.riskVector.actionability)
+    ScoreBar("uncertainty", assessment.riskVector.uncertainty)
+}
+
+@Composable
+private fun ScoreBar(label: String, value: Double) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(0.34f),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1
+        )
+        LinearProgressIndicator(
+            progress = { value.toFloat().coerceIn(0f, 1f) },
+            modifier = Modifier
+                .weight(0.48f)
+                .padding(horizontal = 8.dp)
+        )
+        Text(
+            text = scoreText(value),
+            modifier = Modifier.weight(0.18f),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun EvidenceList(evidence: List<EvidenceItem>) {
+    Spacer(Modifier.height(12.dp))
+    Text("Evidence", style = MaterialTheme.typography.titleSmall)
+    evidence.take(8).forEach { item ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "${item.source} ${scoreText(item.confidence)} ${item.observabilityState}",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
+        Text(
+            text = item.humanExplanation,
+            style = MaterialTheme.typography.bodySmall
+        )
+        Text(
+            text = item.normalizedValue,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DefensiveFindingsList(findings: List<DefensiveSurfaceFinding>) {
+    if (findings.isEmpty()) return
+    Spacer(Modifier.height(12.dp))
+    Text("Defensive findings", style = MaterialTheme.typography.titleSmall)
+    findings.take(8).forEach { finding ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "${finding.findingType} ${finding.severity} ${scoreText(finding.confidence)}",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
+        Text(
+            text = finding.humanExplanation,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun ExportPanel(state: AuraUiState) {
+    Spacer(Modifier.height(12.dp))
+    if (state.exportPath.isNotBlank()) {
+        Text(
+            text = "export=${state.exportPath}",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
+        Spacer(Modifier.height(8.dp))
+    }
+    SectionSurface {
+        Text("JSON preview", style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = state.exportPreview,
+            modifier = Modifier.padding(top = 8.dp),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
+private fun SectionSurface(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(12.dp), content = content)
+    }
+}
+
+@Composable
+private fun KeyValue(key: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = key,
+            modifier = Modifier.weight(0.34f),
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(0.66f),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun scoreText(value: Double): String = String.format(Locale.US, "%.2f", value)
+
+@Composable
+private fun decisionTint(color: DecisionColor): Color = when (color) {
+    DecisionColor.RED -> MaterialTheme.colorScheme.error
+    DecisionColor.YELLOW -> MaterialTheme.colorScheme.tertiary
+    DecisionColor.BLUE -> MaterialTheme.colorScheme.primary
+    DecisionColor.GRAY -> MaterialTheme.colorScheme.outline
+    DecisionColor.GREEN -> MaterialTheme.colorScheme.secondary
 }

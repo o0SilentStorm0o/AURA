@@ -13,6 +13,7 @@ import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
 import cz.davidstrnadel.aura.reasoning.AuraRuleAssets
 import cz.davidstrnadel.aura.reasoning.DefensiveSurfaceAuditor
 import cz.davidstrnadel.aura.reasoning.TemporalEpisodeDetector
+import cz.davidstrnadel.aura.storage.ScanHistoryReport
 import cz.davidstrnadel.aura.storage.SnapshotHistoryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ data class AuraUiState(
     val scanId: String = "",
     val assessments: List<AuraAssessment> = emptyList(),
     val defensiveSurfaceFindings: List<DefensiveSurfaceFinding> = emptyList(),
+    val scanHistory: ScanHistoryReport? = null,
     val exportPreview: String = "",
     val exportPath: String = "",
     val error: String? = null
@@ -96,6 +98,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     scanId = scanId,
                     assessments = assessments,
                     defensiveSurfaceFindings = defensiveSurfaceFindings,
+                    scanHistory = scanHistory,
                     exportPreview = json.take(1600),
                     exportPath = exportFile.absolutePath
                 )
