@@ -34,7 +34,11 @@ The suspicious scenario is intentionally two-phase:
 - `com.example.lowriskutility`: unknown low-exposure app expected to become
   `GRAY`, not `RED` or `YELLOW`.
 - `com.example.sensitivebank`: sensitive-app fixture with `FLAG_SECURE`, used
-  for future defensive-surface and UsageStats scenarios.
+  as a benign sensitive-app baseline.
+- `com.example.leakybank`: sensitive-app fixture with intentionally weak
+  defensive surface: backup allowed, debug build metadata, cleartext traffic
+  allowed, and unprotected exported non-launcher components. It is still
+  harmless and has no malicious payload.
 
 ## Expected Decisions
 
@@ -42,6 +46,8 @@ The suspicious scenario is intentionally two-phase:
 - Low-risk unknown utility: `GRAY`
 - Benign accessibility fixture: `GREEN`
 - Sensitive bank fixture: `GREEN`
+- Leaky bank fixture: `GREEN` as a threat decision, with separate defensive
+  surface findings.
 
 The suspicious agent must also be observed with:
 
@@ -59,6 +65,17 @@ The runner fails if the decision is correct but these evidence states are not
 actually present in the exported snapshot, or if the temporal episodes are
 missing from the second-phase export.
 
+The leaky bank fixture must produce defensive surface findings:
+
+- `BACKUP_ALLOWED_SENSITIVE_APP`
+- `CLEARTEXT_TRAFFIC_ALLOWED`
+- `DEBUGGABLE_SENSITIVE_APP`
+- `UNPROTECTED_EXPORTED_COMPONENT`
+
+These findings are exported under `defensiveSurfaceFindings`; they are not
+primary panic alerts and do not turn the fixture into a malware-like `RED`
+decision.
+
 ## Labelled Metrics
 
 The runner writes `artifacts/scenario_runner/scenario-labels.json` and passes it
@@ -69,6 +86,7 @@ to `tools/evaluator/evaluate.py`. This makes controlled metrics explicit:
 - `non_actionable_critical_alert_rate`
 - `abstention_correctness`
 - `blue_platform_audit_separation`
+- `defensive_surface_recall`
 
 These scenarios are not malware. They are controlled capability-shape fixtures
 used to test role normalization, provenance handling, actionability, and

@@ -21,7 +21,8 @@ data class ObservedComponent(
     val name: String,
     val type: String,
     val exported: Boolean,
-    val permission: String?
+    val permission: String?,
+    val isLauncherEntryPoint: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -100,4 +101,17 @@ data class AuraAssessment(
     val provenance: ProvenanceAssessment,
     val riskVector: RiskVector,
     val decision: AuraDecision
+)
+
+@JsonClass(generateAdapter = true)
+data class DefensiveSurfaceFinding(
+    val findingId: String,
+    val packageName: String,
+    val findingType: DefensiveFindingType,
+    val severity: DefensiveFindingSeverity,
+    val confidence: Double,
+    val observabilityState: ObservabilityState,
+    val actionabilityClass: ActionabilityClass,
+    val evidence: List<EvidenceItem>,
+    val humanExplanation: String
 )

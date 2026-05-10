@@ -45,6 +45,7 @@ class ScenarioLabel:
     user_actionable: bool = False
     platform_audit: bool = False
     abstention_expected: bool = False
+    expected_defensive_findings: tuple[str, ...] = ()
 
 
 def component_permissions(snapshot: dict[str, Any]) -> set[str]:
@@ -110,6 +111,7 @@ def load_labels(path: Path | None) -> dict[str, ScenarioLabel]:
             user_actionable=bool(item.get("userActionable", False)),
             platform_audit=bool(item.get("platformAudit", False)),
             abstention_expected=bool(item.get("abstentionExpected", False)),
+            expected_defensive_findings=tuple(item.get("expectedDefensiveFindings", [])),
         )
         for item in payload.get("labels", [])
     }
@@ -119,6 +121,9 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
     labels = labels or {}
     episodes = export.get("temporalEpisodes", [])
     episode_packages = {episode["packageName"] for episode in episodes}
+    defensive_findings_by_package: dict[str, list[str]] = {}
+    for finding in export.get("defensiveSurfaceFindings", []):
+        defensive_findings_by_package.setdefault(finding["packageName"], []).append(finding["findingType"])
     rows: list[dict[str, Any]] = []
 
     for assessment in export.get("assessments", []):
@@ -138,6 +143,7 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
             "auraDecision": assessment.get("decision", {}).get("color"),
             "auraUserAlert": bool(assessment.get("decision", {}).get("userAlert", False)),
             "auraActionabilityClass": assessment.get("decision", {}).get("actionabilityClass"),
+            "defensiveFindingTypes": sorted(defensive_findings_by_package.get(package_name, [])),
             "baselines": [baseline.__dict__ for baseline in baselines],
         }
         if label is not None:
@@ -147,6 +153,7 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
                 "userActionable": label.user_actionable,
                 "platformAudit": label.platform_audit,
                 "abstentionExpected": label.abstention_expected,
+                "expectedDefensiveFindings": list(label.expected_defensive_findings),
             }
         rows.append(row)
 
@@ -168,6 +175,7 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
             "red_recall_controlled_abuse": 0.0,
             "blue_platform_audit_separation": 0.0,
             "abstention_correctness": 0.0,
+            "defensive_surface_recall": 0.0,
         }
 
     labelled = [row for row in rows if "label" in row]
@@ -197,6 +205,16 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
     platform_audit_blue = sum(1 for row in platform_audit if row["auraDecision"] == "BLUE")
     abstention_expected = [row for row in metric_rows if row.get("label", {}).get("abstentionExpected") is True]
     abstention_gray = sum(1 for row in abstention_expected if row["auraDecision"] == "GRAY")
+    expected_defensive = [
+        (row, finding)
+        for row in metric_rows
+        for finding in row.get("label", {}).get("expectedDefensiveFindings", [])
+    ]
+    observed_expected_defensive = sum(
+        1
+        for row, finding in expected_defensive
+        if finding in row.get("defensiveFindingTypes", [])
+    )
 
     return {
         "non_actionable_critical_alert_rate": round(
@@ -214,6 +232,10 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
         ),
         "abstention_correctness": round(
             abstention_gray / max(1, len(abstention_expected)),
+            4,
+        ),
+        "defensive_surface_recall": round(
+            observed_expected_defensive / max(1, len(expected_defensive)),
             4,
         ),
         "permission_only_critical_rate": round(permission_critical / len(metric_rows), 4),

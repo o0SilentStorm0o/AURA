@@ -1,6 +1,7 @@
 package cz.davidstrnadel.aura.export
 
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
+import cz.davidstrnadel.aura.reasoning.DefensiveSurfaceAuditor
 import cz.davidstrnadel.aura.reasoning.TestSnapshots
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -18,13 +19,15 @@ class AuraJsonExporterTest {
                 requestedPermissions = listOf("android.permission.CAMERA")
             )
         )
+        val defensiveFindings = DefensiveSurfaceAuditor().audit(listOf(assessment))
         val export = AuraScanExport(
             schemaVersion = 1,
             scanId = "scan",
             generatedAt = 1L,
             flavor = "researchFull/standard",
             assessments = listOf(assessment),
-            temporalEpisodes = emptyList()
+            temporalEpisodes = emptyList(),
+            defensiveSurfaceFindings = defensiveFindings
         )
 
         val json = AuraJsonExporter().toJson(export)
@@ -33,5 +36,6 @@ class AuraJsonExporterTest {
         assertTrue(json.contains("\"observabilityState\""))
         assertTrue(json.contains("\"riskVector\""))
         assertTrue(json.contains("\"decision\""))
+        assertTrue(json.contains("\"defensiveSurfaceFindings\""))
     }
 }

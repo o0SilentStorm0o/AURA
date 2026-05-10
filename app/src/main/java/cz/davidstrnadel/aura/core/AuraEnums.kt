@@ -66,3 +66,17 @@ enum class EvidenceSource {
     TEST_FIXTURE,
     OFFLINE_APK_ANALYZER
 }
+
+enum class DefensiveFindingType {
+    DEBUGGABLE_SENSITIVE_APP,
+    BACKUP_ALLOWED_SENSITIVE_APP,
+    CLEARTEXT_TRAFFIC_ALLOWED,
+    UNPROTECTED_EXPORTED_COMPONENT
+}
+
+enum class DefensiveFindingSeverity {
+    INFO,
+    LOW,
+    MEDIUM,
+    HIGH
+}

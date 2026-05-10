@@ -134,6 +134,7 @@ private fun SummaryRow(state: AuraUiState) {
         AssistChip(onClick = {}, label = { Text("GRAY ${state.grayCount}") })
         AssistChip(onClick = {}, label = { Text("YELLOW ${state.yellowCount}") })
         AssistChip(onClick = {}, label = { Text("GREEN ${state.greenCount}") })
+        AssistChip(onClick = {}, label = { Text("DEF ${state.defensiveFindingCount}") })
     }
 }
 

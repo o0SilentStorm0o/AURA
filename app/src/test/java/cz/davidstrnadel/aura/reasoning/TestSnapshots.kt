@@ -15,7 +15,8 @@ object TestSnapshots {
         requestedPermissions: List<String> = emptyList(),
         grantedPermissions: List<String> = emptyList(),
         components: List<ObservedComponent> = emptyList(),
-        specialAccess: Map<String, ObservabilityState> = defaultSpecialAccess()
+        specialAccess: Map<String, ObservabilityState> = defaultSpecialAccess(),
+        rawFeatures: Map<String, String> = defaultRawFeatures(sourceDir)
     ): ObservedAppSnapshot = ObservedAppSnapshot(
         snapshotId = "snapshot-$packageName",
         scanId = "scan",
@@ -43,10 +44,7 @@ object TestSnapshots {
         signingCertDigestsSha256 = listOf("fixture"),
         components = components,
         specialAccess = specialAccess,
-        rawFeatures = mapOf(
-            "sourcePartition" to if (sourceDir.startsWith("/data/app")) "data_app" else "system_priv_app",
-            "foregroundSensitiveAppRecentlyObserved" to "false"
-        )
+        rawFeatures = rawFeatures
     )
 
     fun defaultSpecialAccess(): Map<String, ObservabilityState> = mapOf(
@@ -54,5 +52,14 @@ object TestSnapshots {
         "notification_listener" to ObservabilityState.OBSERVED_DISABLED,
         "overlay" to ObservabilityState.OBSERVED_DISABLED,
         "request_install_packages" to ObservabilityState.OBSERVED_DISABLED
+    )
+
+    fun defaultRawFeatures(sourceDir: String = "/data/app/fixture/base.apk"): Map<String, String> = mapOf(
+        "sourcePartition" to if (sourceDir.startsWith("/data/app")) "data_app" else "system_priv_app",
+        "foregroundSensitiveAppRecentlyObserved" to "false",
+        "allowBackup" to "false",
+        "debuggable" to "false",
+        "usesCleartextTraffic" to "false",
+        "networkSecurityConfigObservability" to ObservabilityState.DECLARED_ONLY.name
     )
 }

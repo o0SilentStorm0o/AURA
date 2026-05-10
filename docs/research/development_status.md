@@ -12,18 +12,20 @@ This document separates what exists in the current Research MVP from planned wor
 - Versioned `ObservedAppSnapshot`, first-class `EvidenceItem`, exact `ObservabilityState`, `ActionabilityClass`, `RiskVector`, and `AuraDecision`.
 - PackageManager-first role inference, provenance classification, role/provenance-aware decision policy, and snapshot-first temporal episode detector.
 - Stable JSON export saved locally in app-private storage as `files/exports/aura-last-scan.json`.
+- Atomic export/history writes so adb pulls do not observe partially written JSON.
 - Private previous-snapshot state saved as `files/state/previous-snapshots.json` for snapshot-diff temporal episodes.
+- On-device defensive surface findings for observable manifest/app metadata: debuggable sensitive apps, backup allowed for sensitive apps, best-effort cleartext traffic allowance, and unprotected exported non-launcher components.
 - Python evaluator scaffold for baselines.
 - Unit tests for observability enum contract, actionability enum contract, role/risk/provenance decisions, JSON shape, and temporal TTL behavior.
-- Harmless emulator fixture APKs for suspicious, benign accessibility, low-risk unknown, and sensitive-app scenarios.
-- ADB scenario runner that installs fixture APKs, performs a two-phase temporal scan, toggles special-access state, runs AURA, pulls local export, evaluates baselines, and asserts expected decisions/evidence/episodes.
+- Harmless emulator fixture APKs for suspicious, benign accessibility, low-risk unknown, benign sensitive-app, and leaky defensive-surface scenarios.
+- ADB scenario runner that installs fixture APKs, performs a two-phase temporal scan, toggles special-access state, runs AURA, pulls local export, evaluates baselines, and asserts expected decisions/evidence/episodes/defensive findings.
 - Research docs for limitations, observability, risk vector, migration, and privacy/ethics.
 
 ## Not Yet Implemented
 
 - Multi-scan history beyond the immediately previous snapshot set.
 - UsageStats foreground correlation beyond the explicit observability marker.
-- Offline APK analyzer for `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, and `accessibilityDataSensitive`.
+- Offline APK analyzer for detailed `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, and `accessibilityDataSensitive`.
 - Asset-driven rules loaded directly from JSON assets; current rules are mirrored in code for the MVP.
 - Human-facing detailed app drill-down with evidence graph and remediation.
 - Expert review labeling workflow for evaluator metrics.

@@ -26,3 +26,7 @@ python3 tools/evaluator/evaluate.py artifacts/scenario_runner/aura-last-scan.jso
 
 When labels are present, the main research metrics are computed over the
 labelled population instead of every package visible on the emulator.
+
+Labelled defensive-surface expectations are reported with
+`defensive_surface_recall`. These evaluate top-level
+`defensiveSurfaceFindings`, not the primary threat decision.

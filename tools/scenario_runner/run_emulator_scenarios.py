@@ -27,6 +27,13 @@ SUSPICIOUS_NOTIFICATION = (
     "com.flashlight.cleaner.update/"
     "com.flashlight.cleaner.update.FakeNotificationListenerService"
 )
+FIXTURE_PACKAGES = [
+    "com.flashlight.cleaner.update",
+    "org.fdroid.example.screenreader",
+    "com.example.lowriskutility",
+    "com.example.sensitivebank",
+    "com.example.leakybank",
+]
 
 
 @dataclass(frozen=True)
@@ -40,6 +47,7 @@ class ScenarioExpectation:
     abstention_expected: bool = False
     expected_special_access: dict[str, str] | None = None
     expected_temporal_episodes: list[str] | None = None
+    expected_defensive_findings: list[str] | None = None
 
 
 EXPECTATIONS = [
@@ -76,6 +84,17 @@ EXPECTATIONS = [
         "GREEN",
         "Sensitive app fixture without risky capability should not be an alert",
     ),
+    ScenarioExpectation(
+        "com.example.leakybank",
+        "GREEN",
+        "Sensitive app fixture with weak defensive surface should stay out of the panic queue",
+        expected_defensive_findings=[
+            "BACKUP_ALLOWED_SENSITIVE_APP",
+            "CLEARTEXT_TRAFFIC_ALLOWED",
+            "DEBUGGABLE_SENSITIVE_APP",
+            "UNPROTECTED_EXPORTED_COMPONENT",
+        ],
+    ),
 ]
 
 
@@ -105,6 +124,7 @@ def build_all() -> None:
             ":testapps:benign-accessibility:assembleDebug",
             ":testapps:lowrisk-utility:assembleDebug",
             ":testapps:sensitive-bank:assembleDebug",
+            ":testapps:leaky-bank:assembleDebug",
         ]
     )
 
@@ -124,12 +144,16 @@ def apk(path: str) -> str:
 
 
 def install_apps() -> None:
+    for package_name in FIXTURE_PACKAGES:
+        adb("uninstall", package_name, check=False)
+
     apks = [
         "app/build/outputs/apk/researchFullStandard/debug/app-researchFull-standard-debug.apk",
         "testapps/suspicious-agent/build/outputs/apk/debug/suspicious-agent-debug.apk",
         "testapps/benign-accessibility/build/outputs/apk/debug/benign-accessibility-debug.apk",
         "testapps/lowrisk-utility/build/outputs/apk/debug/lowrisk-utility-debug.apk",
         "testapps/sensitive-bank/build/outputs/apk/debug/sensitive-bank-debug.apk",
+        "testapps/leaky-bank/build/outputs/apk/debug/leaky-bank-debug.apk",
     ]
     for candidate in apks:
         adb("install", "-r", apk(candidate))
@@ -247,6 +271,7 @@ def run_aura_and_pull_export(output_name: str, *, clear_data: bool) -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     export_path = OUT_DIR / output_name
 
+    last_payload = ""
     for _ in range(60):
         probe = adb(
             "shell",
@@ -266,10 +291,25 @@ def run_aura_and_pull_export(output_name: str, *, clear_data: bool) -> Path:
                 "files/exports/aura-last-scan.json",
                 capture=True,
             ).stdout
+            last_payload = payload
+            if not is_valid_export(payload):
+                time.sleep(1)
+                continue
             export_path.write_text(payload)
             return export_path
         time.sleep(2)
-    raise RuntimeError("AURA export was not produced")
+    raise RuntimeError(
+        "AURA export was not produced as valid JSON; "
+        f"last payload length={len(last_payload)}"
+    )
+
+
+def is_valid_export(payload: str) -> bool:
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(parsed.get("assessments"), list) and isinstance(parsed.get("scanId"), str)
 
 
 def write_labels() -> Path:
@@ -286,6 +326,7 @@ def write_labels() -> Path:
                         "userActionable": expectation.user_actionable,
                         "platformAudit": expectation.platform_audit,
                         "abstentionExpected": expectation.abstention_expected,
+                        "expectedDefensiveFindings": expectation.expected_defensive_findings or [],
                     }
                     for expectation in EXPECTATIONS
                 ],
@@ -359,6 +400,18 @@ def assert_expectations(export_path: Path) -> None:
                     failures.append(
                         f"{expectation.package_name}: missing temporal episode {expected_type}; "
                         f"observed {sorted(actual_temporal)}"
+                    )
+        if expectation.expected_defensive_findings:
+            actual_defensive = {
+                finding["findingType"]
+                for finding in export.get("defensiveSurfaceFindings", [])
+                if finding["packageName"] == expectation.package_name
+            }
+            for expected_type in expectation.expected_defensive_findings:
+                if expected_type not in actual_defensive:
+                    failures.append(
+                        f"{expectation.package_name}: missing defensive finding {expected_type}; "
+                        f"observed {sorted(actual_defensive)}"
                     )
 
     if failures:

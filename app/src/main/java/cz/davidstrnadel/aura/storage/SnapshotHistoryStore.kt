@@ -36,7 +36,16 @@ class SnapshotHistoryStore(private val stateDir: File) {
             writtenAt = writtenAt,
             snapshots = snapshots.sortedBy { it.packageName }
         )
-        historyFile.writeText(adapter.indent("  ").toJson(payload))
+        writeAtomically(historyFile, adapter.indent("  ").toJson(payload))
+    }
+
+    private fun writeAtomically(file: File, content: String) {
+        val tempFile = file.resolveSibling("${file.name}.tmp")
+        tempFile.writeText(content)
+        if (!tempFile.renameTo(file)) {
+            file.writeText(content)
+            tempFile.delete()
+        }
     }
 
     companion object {

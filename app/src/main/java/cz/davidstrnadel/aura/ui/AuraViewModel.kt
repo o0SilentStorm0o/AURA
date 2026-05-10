@@ -5,10 +5,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cz.davidstrnadel.aura.collector.AppSnapshotCollector
 import cz.davidstrnadel.aura.core.AuraAssessment
+import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
 import cz.davidstrnadel.aura.core.DecisionColor
 import cz.davidstrnadel.aura.export.AuraJsonExporter
 import cz.davidstrnadel.aura.export.AuraScanExport
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
+import cz.davidstrnadel.aura.reasoning.DefensiveSurfaceAuditor
 import cz.davidstrnadel.aura.reasoning.TemporalEpisodeDetector
 import cz.davidstrnadel.aura.storage.SnapshotHistoryStore
 import kotlinx.coroutines.Dispatchers
@@ -16,12 +18,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 
 data class AuraUiState(
     val loading: Boolean = true,
     val scanId: String = "",
     val assessments: List<AuraAssessment> = emptyList(),
+    val defensiveSurfaceFindings: List<DefensiveSurfaceFinding> = emptyList(),
     val exportPreview: String = "",
     val exportPath: String = "",
     val error: String? = null
@@ -31,11 +35,13 @@ data class AuraUiState(
     val grayCount: Int = assessments.count { it.decision.color == DecisionColor.GRAY }
     val yellowCount: Int = assessments.count { it.decision.color == DecisionColor.YELLOW }
     val greenCount: Int = assessments.count { it.decision.color == DecisionColor.GREEN }
+    val defensiveFindingCount: Int = defensiveSurfaceFindings.size
 }
 
 class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val collector = AppSnapshotCollector(application)
     private val assessmentEngine = AuraAssessmentEngine()
+    private val defensiveSurfaceAuditor = DefensiveSurfaceAuditor()
     private val temporalEpisodeDetector = TemporalEpisodeDetector()
     private val snapshotHistoryStore = SnapshotHistoryStore.fromContext(application)
     private val exporter = AuraJsonExporter()
@@ -60,6 +66,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                 val assessments = snapshots
                     .map { assessmentEngine.assess(it) }
                     .sortedWith(compareBy<AuraAssessment> { decisionRank(it) }.thenBy { it.snapshot.packageName })
+                val defensiveSurfaceFindings = defensiveSurfaceAuditor.audit(assessments)
                 val flavor = assessments.firstOrNull()?.snapshot?.flavor.orEmpty()
                 val export = AuraScanExport(
                     schemaVersion = 1,
@@ -67,7 +74,8 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     generatedAt = System.currentTimeMillis(),
                     flavor = flavor,
                     assessments = assessments,
-                    temporalEpisodes = temporalEpisodes
+                    temporalEpisodes = temporalEpisodes,
+                    defensiveSurfaceFindings = defensiveSurfaceFindings
                 )
                 val json = exporter.toJson(export)
                 val exportFile = getApplication<Application>()
@@ -75,12 +83,13 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     .resolve("exports")
                     .also { it.mkdirs() }
                     .resolve("aura-last-scan.json")
-                exportFile.writeText(json)
                 snapshotHistoryStore.save(snapshots)
+                writeAtomically(exportFile, json)
                 _state.value = AuraUiState(
                     loading = false,
                     scanId = scanId,
                     assessments = assessments,
+                    defensiveSurfaceFindings = defensiveSurfaceFindings,
                     exportPreview = json.take(1600),
                     exportPath = exportFile.absolutePath
                 )
@@ -100,5 +109,14 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
         DecisionColor.BLUE -> 2
         DecisionColor.GRAY -> 3
         DecisionColor.GREEN -> 4
+    }
+
+    private fun writeAtomically(file: File, content: String) {
+        val tempFile = file.resolveSibling("${file.name}.tmp")
+        tempFile.writeText(content)
+        if (!tempFile.renameTo(file)) {
+            file.writeText(content)
+            tempFile.delete()
+        }
     }
 }

@@ -2,6 +2,7 @@ package cz.davidstrnadel.aura.collector
 
 import android.app.AppOpsManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -49,7 +50,7 @@ class AppSnapshotCollector(private val context: Context) {
         val appInfo = applicationInfo
         val requested = requestedPermissions?.toList().orEmpty().sorted()
         val granted = grantedPermissions().sorted()
-        val components = observedComponents().sortedWith(compareBy({ it.type }, { it.name }))
+        val components = observedComponents(launcherActivityNames(packageName)).sortedWith(compareBy({ it.type }, { it.name }))
         val installer = installerPackage(packageName)
         val signing = signingDigests()
         val sourceDir = appInfo?.sourceDir.orEmpty()
@@ -103,6 +104,12 @@ class AppSnapshotCollector(private val context: Context) {
                 "requestedPermissionCount" to requested.size.toString(),
                 "grantedPermissionCount" to granted.size.toString(),
                 "componentCount" to components.size.toString(),
+                "exportedComponentCount" to components.count { it.exported }.toString(),
+                "unprotectedExportedComponentCount" to unprotectedExportedComponents(components).size.toString(),
+                "allowBackup" to appFlags.and(ApplicationInfo.FLAG_ALLOW_BACKUP).let { (it != 0).toString() },
+                "debuggable" to appFlags.and(ApplicationInfo.FLAG_DEBUGGABLE).let { (it != 0).toString() },
+                "usesCleartextTraffic" to appFlags.and(ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC).let { (it != 0).toString() },
+                "networkSecurityConfigObservability" to ObservabilityState.DECLARED_ONLY.name,
                 "hasBootPersistence" to requested.any { it.endsWith("RECEIVE_BOOT_COMPLETED") }.toString(),
                 "foregroundSensitiveAppRecentlyObserved" to "false"
             )
@@ -136,10 +143,16 @@ class AppSnapshotCollector(private val context: Context) {
         }
     }
 
-    private fun PackageInfo.observedComponents(): List<ObservedComponent> {
+    private fun PackageInfo.observedComponents(launcherActivityNames: Set<String>): List<ObservedComponent> {
         val output = mutableListOf<ObservedComponent>()
         activities?.forEach {
-            output += ObservedComponent(it.name, "activity", it.exported, it.permission)
+            output += ObservedComponent(
+                name = it.name,
+                type = "activity",
+                exported = it.exported,
+                permission = it.permission,
+                isLauncherEntryPoint = it.name in launcherActivityNames
+            )
         }
         services?.forEach {
             output += ObservedComponent(it.name, "service", it.exported, it.permission)
@@ -152,6 +165,26 @@ class AppSnapshotCollector(private val context: Context) {
         }
         return output
     }
+
+    @Suppress("DEPRECATION")
+    private fun launcherActivityNames(packageName: String): Set<String> {
+        val intent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .setPackage(packageName)
+        val resolved = if (Build.VERSION.SDK_INT >= 33) {
+            packageManager.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0L))
+        } else {
+            packageManager.queryIntentActivities(intent, 0)
+        }
+        return resolved.mapNotNull { it.activityInfo?.name }.toSet()
+    }
+
+    private fun unprotectedExportedComponents(components: List<ObservedComponent>): List<ObservedComponent> =
+        components.filter { component ->
+            component.exported &&
+                component.permission.isNullOrBlank() &&
+                !component.isLauncherEntryPoint
+        }
 
     @Suppress("DEPRECATION")
     private fun PackageInfo.signingDigests(): List<String> {
