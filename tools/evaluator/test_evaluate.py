@@ -48,6 +48,10 @@ def assessment(
                 }
             ],
         },
+        "evidenceGraph": {
+            "nodes": [{"nodeId": "decision:unit", "type": "DECISION"}],
+            "edges": [{"from": "risk-vector:unit", "to": "decision:unit", "relation": "DERIVES"}],
+        },
     }
 
 
@@ -141,6 +145,8 @@ class EvaluatorMetricsTest(unittest.TestCase):
         self.assertEqual(1.0, result["modelMetrics"]["full_aura"]["platform_audit_separation"])
         self.assertEqual(1.0, result["modelMetrics"]["full_aura"]["abstention_correctness"])
         self.assertEqual(["unit_action"], result["rows"][0]["auraRecommendedActionIds"])
+        self.assertEqual(1, result["rows"][0]["evidenceGraphNodeCount"])
+        self.assertEqual(1, result["rows"][0]["evidenceGraphEdgeCount"])
         self.assertEqual(
             0.3333,
             result["comparisons"]["aura_non_actionable_critical_alert_rate_reduction_vs_permission_only"],

@@ -88,3 +88,21 @@ enum class RemediationScope {
     RESEARCH,
     NONE
 }
+
+enum class EvidenceGraphNodeType {
+    APP,
+    EVIDENCE,
+    ROLE,
+    PROVENANCE,
+    RISK_VECTOR,
+    DECISION,
+    RECOMMENDED_ACTION
+}
+
+enum class EvidenceGraphRelation {
+    OBSERVED_FOR,
+    SUPPORTS,
+    CONTRADICTS,
+    DERIVES,
+    RECOMMENDS
+}

@@ -47,6 +47,8 @@ class AuraJsonExporterTest {
         assertTrue(json.contains("\"riskVector\""))
         assertTrue(json.contains("\"decision\""))
         assertTrue(json.contains("\"recommendedActions\""))
+        assertTrue(json.contains("\"evidenceGraph\""))
+        assertTrue(json.contains("\"edges\""))
         assertTrue(json.contains("\"defensiveSurfaceFindings\""))
         assertTrue(json.contains("\"scanHistory\""))
         assertTrue(json.contains("\"packagesNewInThisScan\""))

@@ -34,6 +34,9 @@ The output includes three levels:
   role-aware, role+provenance, temporal, and full AURA.
 - `comparisons`: deltas that quantify how much full AURA changes key metrics
   versus permission-only.
+- `rows[].evidenceGraphNodeCount` and `rows[].evidenceGraphEdgeCount`:
+  structural checks that exported decisions remain decomposable into graph
+  evidence.
 
 Labelled defensive-surface expectations are reported with
 `defensive_surface_recall`. These evaluate top-level

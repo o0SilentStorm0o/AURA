@@ -106,13 +106,37 @@ data class AuraDecision(
 )
 
 @JsonClass(generateAdapter = true)
+data class EvidenceGraphNode(
+    val nodeId: String,
+    val type: EvidenceGraphNodeType,
+    val label: String,
+    val value: String,
+    val confidence: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EvidenceGraphEdge(
+    val from: String,
+    val to: String,
+    val relation: EvidenceGraphRelation,
+    val evidenceId: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EvidenceGraph(
+    val nodes: List<EvidenceGraphNode> = emptyList(),
+    val edges: List<EvidenceGraphEdge> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
 data class AuraAssessment(
     val snapshot: ObservedAppSnapshot,
     val evidence: List<EvidenceItem>,
     val role: RoleInference,
     val provenance: ProvenanceAssessment,
     val riskVector: RiskVector,
-    val decision: AuraDecision
+    val decision: AuraDecision,
+    val evidenceGraph: EvidenceGraph = EvidenceGraph()
 )
 
 @JsonClass(generateAdapter = true)

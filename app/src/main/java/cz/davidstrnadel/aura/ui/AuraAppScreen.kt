@@ -47,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import cz.davidstrnadel.aura.core.AuraAssessment
 import cz.davidstrnadel.aura.core.DecisionColor
 import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
+import cz.davidstrnadel.aura.core.EvidenceGraph
 import cz.davidstrnadel.aura.core.EvidenceItem
 import cz.davidstrnadel.aura.core.RecommendedAction
 import java.util.Locale
@@ -261,6 +262,7 @@ private fun AppDetailPanel(
             style = MaterialTheme.typography.bodyMedium
         )
         RecommendedActionsList(assessment.decision.recommendedActions)
+        EvidenceGraphSummary(assessment.evidenceGraph)
         EvidenceList(assessment.evidence)
         DefensiveFindingsList(findings)
     }
@@ -351,6 +353,28 @@ private fun RecommendedActionsList(actions: List<RecommendedAction>) {
         Text(
             text = action.description,
             style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun EvidenceGraphSummary(graph: EvidenceGraph) {
+    if (graph.nodes.isEmpty()) return
+    Spacer(Modifier.height(12.dp))
+    Text("Evidence graph", style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = "nodes=${graph.nodes.size} edges=${graph.edges.size}",
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace
+    )
+    graph.edges.take(8).forEach { edge ->
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "${edge.from} ${edge.relation} ${edge.to}",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

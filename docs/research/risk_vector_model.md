@@ -31,6 +31,11 @@ active risky capability state. They are not free-form detector output:
 - `GREEN` actions generally state that no user action is required for the
   observed scan evidence.
 
+Each assessment also exports an `evidenceGraph` with typed nodes and edges.
+The graph links the app, machine-readable evidence, role/provenance inference,
+risk vector, final decision, and recommended actions. It is deterministic and
+derived from already exported evidence IDs; it is not an additional detector.
+
 Primary evaluation metrics:
 
 - `non_actionable_critical_alert_rate`

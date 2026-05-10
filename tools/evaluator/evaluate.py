@@ -160,6 +160,8 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
                 for action in assessment.get("decision", {}).get("recommendedActions", [])
                 if action.get("userFacing") is True
             ),
+            "evidenceGraphNodeCount": len(assessment.get("evidenceGraph", {}).get("nodes", [])),
+            "evidenceGraphEdgeCount": len(assessment.get("evidenceGraph", {}).get("edges", [])),
             "defensiveFindingTypes": sorted(defensive_findings_by_package.get(package_name, [])),
             "baselines": [baseline.__dict__ for baseline in baselines],
         }

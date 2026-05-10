@@ -6,7 +6,8 @@ import cz.davidstrnadel.aura.core.ObservedAppSnapshot
 class AuraAssessmentEngine(
     private val roleInferenceEngine: RoleInferenceEngine = RoleInferenceEngine(),
     private val provenanceClassifier: ProvenanceClassifier = ProvenanceClassifier(),
-    private val riskDecisionEngine: RiskDecisionEngine = RiskDecisionEngine()
+    private val riskDecisionEngine: RiskDecisionEngine = RiskDecisionEngine(),
+    private val evidenceGraphBuilder: EvidenceGraphBuilder = EvidenceGraphBuilder()
 ) {
     fun assess(snapshot: ObservedAppSnapshot): AuraAssessment {
         val role = roleInferenceEngine.infer(snapshot)
@@ -19,13 +20,24 @@ class AuraAssessmentEngine(
             provenanceConfidence = provenance.provenance.confidence
         )
 
-        return AuraAssessment(
+        val evidence = role.evidence + provenance.evidence + risk.evidence
+        val evidenceGraph = evidenceGraphBuilder.build(
             snapshot = snapshot,
-            evidence = role.evidence + provenance.evidence + risk.evidence,
+            evidence = evidence,
             role = role.role,
             provenance = provenance.provenance,
             riskVector = risk.riskVector,
             decision = risk.decision
+        )
+
+        return AuraAssessment(
+            snapshot = snapshot,
+            evidence = evidence,
+            role = role.role,
+            provenance = provenance.provenance,
+            riskVector = risk.riskVector,
+            decision = risk.decision,
+            evidenceGraph = evidenceGraph
         )
     }
 

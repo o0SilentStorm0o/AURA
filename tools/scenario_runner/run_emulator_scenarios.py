@@ -504,6 +504,13 @@ def assert_expectations(export_path: Path) -> None:
             failures.append(
                 f"{expectation.package_name}: expected {expectation.expected_color}, got {actual}"
             )
+        evidence_graph = assessment.get("evidenceGraph", {})
+        graph_nodes = evidence_graph.get("nodes", [])
+        graph_edges = evidence_graph.get("edges", [])
+        if len(graph_nodes) < 5:
+            failures.append(f"{expectation.package_name}: evidence graph has too few nodes")
+        if not any(edge.get("relation") == "DERIVES" and edge.get("to") == f"decision:{actual}" for edge in graph_edges):
+            failures.append(f"{expectation.package_name}: evidence graph missing DERIVES edge to decision:{actual}")
         recommended_action_ids = {
             action.get("actionId")
             for action in assessment.get("decision", {}).get("recommendedActions", [])
