@@ -49,6 +49,18 @@ def assessment(
                 }
             ],
         },
+        "decisionTrace": {
+            "policyVersion": "0.1.0",
+            "evaluatedRules": [
+                {"ruleId": "UNIT_RULE", "matched": True},
+            ],
+            "invariantChecks": [
+                {"invariantId": "UNIT_INVARIANT", "passed": True},
+            ],
+        },
+        "userRiskStory": {
+            "headline": "Unit story",
+        },
         "evidenceGraph": {
             "nodes": [{"nodeId": "decision:unit", "type": "DECISION"}],
             "edges": [{"from": "risk-vector:unit", "to": "decision:unit", "relation": "DERIVES"}],
@@ -165,6 +177,8 @@ class EvaluatorMetricsTest(unittest.TestCase):
         self.assertEqual(["unit_action"], result["rows"][0]["auraRecommendedActionIds"])
         self.assertEqual(1, result["rows"][0]["evidenceGraphNodeCount"])
         self.assertEqual(1, result["rows"][0]["evidenceGraphEdgeCount"])
+        self.assertEqual("0.1.0", result["rows"][0]["decisionTracePolicyVersion"])
+        self.assertEqual(1.0, result["metrics"]["decision_trace_completeness"])
         self.assertEqual(
             0.3333,
             result["comparisons"]["aura_non_actionable_critical_alert_rate_reduction_vs_permission_only"],

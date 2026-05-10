@@ -106,6 +106,60 @@ data class AuraDecision(
 )
 
 @JsonClass(generateAdapter = true)
+data class EvaluatedPolicyRule(
+    val ruleId: String,
+    val ruleName: String,
+    val matched: Boolean,
+    val inputs: Map<String, String>,
+    val explanation: String
+)
+
+@JsonClass(generateAdapter = true)
+data class RejectedDecisionAlternative(
+    val decisionColor: DecisionColor,
+    val reason: String,
+    val blockingInputs: Map<String, String>
+)
+
+@JsonClass(generateAdapter = true)
+data class DecisionCounterfactual(
+    val targetDecision: DecisionColor,
+    val requiredChanges: List<String>,
+    val userActionable: Boolean
+)
+
+@JsonClass(generateAdapter = true)
+data class DecisionInvariantCheck(
+    val invariantId: String,
+    val passed: Boolean,
+    val explanation: String
+)
+
+@JsonClass(generateAdapter = true)
+data class DecisionTrace(
+    val policyVersion: String,
+    val evaluatedRules: List<EvaluatedPolicyRule>,
+    val selectedDecision: DecisionColor,
+    val rejectedAlternatives: List<RejectedDecisionAlternative>,
+    val thresholdInputs: Map<String, String>,
+    val counterfactuals: List<DecisionCounterfactual>,
+    val invariantChecks: List<DecisionInvariantCheck>
+)
+
+@JsonClass(generateAdapter = true)
+data class UserRiskStory(
+    val headline: String,
+    val severityLabel: String,
+    val primaryReason: String,
+    val whatWasObserved: List<String>,
+    val whatWasNotObserved: List<String>,
+    val whyItMatters: String,
+    val recommendedNextStep: String,
+    val confidenceText: String,
+    val limitationsText: String
+)
+
+@JsonClass(generateAdapter = true)
 data class EvidenceGraphNode(
     val nodeId: String,
     val type: EvidenceGraphNodeType,
@@ -136,6 +190,8 @@ data class AuraAssessment(
     val provenance: ProvenanceAssessment,
     val riskVector: RiskVector,
     val decision: AuraDecision,
+    val decisionTrace: DecisionTrace,
+    val userRiskStory: UserRiskStory,
     val evidenceGraph: EvidenceGraph = EvidenceGraph()
 )
 
@@ -150,4 +206,14 @@ data class DefensiveSurfaceFinding(
     val actionabilityClass: ActionabilityClass,
     val evidence: List<EvidenceItem>,
     val humanExplanation: String
+)
+
+@JsonClass(generateAdapter = true)
+data class DefensivePostureSummary(
+    val packageName: String,
+    val postureClass: DefensivePostureClass,
+    val findingCount: Int,
+    val highestSeverity: DefensiveFindingSeverity?,
+    val findingIds: List<String>,
+    val userFacingSummary: String
 )

@@ -62,6 +62,7 @@ data class ProvenanceRulesAsset(
 @JsonClass(generateAdapter = true)
 data class DecisionPolicyAsset(
     val schemaVersion: Int,
+    val policyVersion: String = "0.1.0",
     val policy: Map<String, String>
 )
 
@@ -73,12 +74,15 @@ class AuraRuleAssets(
     val knownOemPatterns: List<String> = DEFAULT_OEM_PATTERNS,
     val knownFdroidSignatures: Set<String> = emptySet(),
     val provenanceRules: List<ProvenanceRuleAsset> = DEFAULT_PROVENANCE_RULES,
+    val decisionPolicyVersion: String = DEFAULT_DECISION_POLICY_VERSION,
     val decisionPolicy: Map<String, String> = DEFAULT_DECISION_POLICY
 ) {
     fun roleRulesFor(role: RoleCategory): List<RoleRuleAsset> =
         roleRules.filter { it.role == role.name }
 
     companion object {
+        const val DEFAULT_DECISION_POLICY_VERSION = "0.1.0"
+
         val DEFAULT_PERMISSION_HARM = mapOf(
             "android.permission.CAMERA" to 0.68,
             "android.permission.RECORD_AUDIO" to 0.76,
@@ -200,6 +204,7 @@ class AuraRuleAssets(
                     runCatching { moshi.adapter(type).fromJson(json) }.getOrNull()
                 }
 
+            val decisionPolicyAsset = readJson("decision_policy.json", DecisionPolicyAsset::class.java)
             return AuraRuleAssets(
                 roleRules = readJson("role_rules.json", RoleRulesAsset::class.java)?.rules ?: DEFAULT_ROLE_RULES,
                 permissionHarm = readJson("permission_harm_model.json", PermissionHarmAsset::class.java)?.permissions ?: DEFAULT_PERMISSION_HARM,
@@ -208,7 +213,8 @@ class AuraRuleAssets(
                 knownOemPatterns = readJson("known_oem_patterns.json", KnownPatternsAsset::class.java)?.patterns ?: DEFAULT_OEM_PATTERNS,
                 knownFdroidSignatures = readJson("known_fdroid_signatures.json", KnownSignaturesAsset::class.java)?.sha256Digests?.toSet().orEmpty(),
                 provenanceRules = readJson("provenance_rules.json", ProvenanceRulesAsset::class.java)?.rules ?: DEFAULT_PROVENANCE_RULES,
-                decisionPolicy = readJson("decision_policy.json", DecisionPolicyAsset::class.java)?.policy ?: DEFAULT_DECISION_POLICY
+                decisionPolicyVersion = decisionPolicyAsset?.policyVersion ?: DEFAULT_DECISION_POLICY_VERSION,
+                decisionPolicy = decisionPolicyAsset?.policy ?: DEFAULT_DECISION_POLICY
             )
         }
     }

@@ -36,6 +36,8 @@ class DecisionPolicyTest {
 
         assertEquals(DecisionColor.GREEN, assessment.decision.color)
         assertFalse(assessment.decision.userAlert)
+        assertEquals(DecisionColor.GREEN, assessment.decisionTrace.selectedDecision)
+        assertTrue(assessment.userRiskStory.headline.isNotBlank())
     }
 
     @Test
@@ -65,6 +67,8 @@ class DecisionPolicyTest {
         assertTrue(assessment.decision.recommendedActions.none { it.userFacing })
         assertTrue(assessment.decision.recommendedActions.any { it.scope == RemediationScope.EXPERT_AUDIT })
         assertTrue(assessment.decision.recommendedActions.any { it.actionId == "audit_platform_component" })
+        assertTrue(assessment.decisionTrace.invariantChecks.all { it.passed })
+        assertTrue(assessment.userRiskStory.primaryReason.contains("platform", ignoreCase = true))
     }
 
     @Test
@@ -79,6 +83,7 @@ class DecisionPolicyTest {
         assertEquals(DecisionColor.GRAY, assessment.decision.color)
         assertFalse(assessment.decision.userAlert)
         assertTrue(assessment.decision.recommendedActions.any { it.actionId == "abstain_collect_more_context" })
+        assertTrue(assessment.decisionTrace.evaluatedRules.any { it.ruleId == "GRAY_UNKNOWN_LOW_EXPOSURE" && it.matched })
     }
 
     @Test
@@ -106,6 +111,10 @@ class DecisionPolicyTest {
         assertTrue(assessment.decision.recommendedActions.any { it.actionId == "disable_risky_special_access" })
         assertTrue(assessment.decision.recommendedActions.any { it.actionabilityClass == ActionabilityClass.USER_CAN_UNINSTALL })
         assertTrue(assessment.decision.recommendedActions.any { it.destructive })
+        assertTrue(assessment.decisionTrace.evaluatedRules.any { it.ruleId == "RED_USER_ACTIONABLE_THREAT" && it.matched })
+        assertTrue(assessment.decisionTrace.counterfactuals.any { it.targetDecision == DecisionColor.YELLOW })
+        assertTrue(assessment.decisionTrace.invariantChecks.all { it.passed })
+        assertEquals("Action required", assessment.userRiskStory.headline)
     }
 
     @Test

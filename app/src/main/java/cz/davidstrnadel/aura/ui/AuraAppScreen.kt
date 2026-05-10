@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cz.davidstrnadel.aura.core.AuraAssessment
 import cz.davidstrnadel.aura.core.DecisionColor
+import cz.davidstrnadel.aura.core.DefensivePostureSummary
 import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
 import cz.davidstrnadel.aura.core.EvidenceGraph
 import cz.davidstrnadel.aura.core.EvidenceItem
@@ -98,6 +99,9 @@ fun AuraAppScreen(viewModel: AuraViewModel = viewModel()) {
                                 AppDetailPanel(
                                     assessment = assessment,
                                     findings = state.defensiveSurfaceFindings.filter {
+                                        it.packageName == assessment.snapshot.packageName
+                                    },
+                                    posture = state.defensivePostures.firstOrNull {
                                         it.packageName == assessment.snapshot.packageName
                                     }
                                 )
@@ -232,7 +236,8 @@ private fun AssessmentRow(
 @Composable
 private fun AppDetailPanel(
     assessment: AuraAssessment,
-    findings: List<DefensiveSurfaceFinding>
+    findings: List<DefensiveSurfaceFinding>,
+    posture: DefensivePostureSummary?
 ) {
     SectionSurface {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -252,8 +257,11 @@ private fun AppDetailPanel(
         KeyValue("role", "${assessment.role.predicted} (${scoreText(assessment.role.confidence)})")
         KeyValue("provenance", "${assessment.provenance.provenanceClass} (${scoreText(assessment.provenance.confidence)})")
         KeyValue("actionability", assessment.decision.actionabilityClass.name)
+        KeyValue("defensive posture", posture?.postureClass?.name ?: "NO_OBSERVED_WEAKNESS")
         KeyValue("installer", assessment.snapshot.installerPackageName ?: "none")
         KeyValue("source", assessment.snapshot.rawFeatures["sourcePartition"] ?: assessment.snapshot.sourceDir)
+        Spacer(Modifier.height(12.dp))
+        UserRiskStoryPanel(assessment)
         Spacer(Modifier.height(12.dp))
         RiskVectorBars(assessment)
         Spacer(Modifier.height(12.dp))
@@ -262,9 +270,29 @@ private fun AppDetailPanel(
             style = MaterialTheme.typography.bodyMedium
         )
         RecommendedActionsList(assessment.decision.recommendedActions)
+        DecisionTraceSummary(assessment)
         EvidenceGraphSummary(assessment.evidenceGraph)
         EvidenceList(assessment.evidence)
-        DefensiveFindingsList(findings)
+        DefensivePosturePanel(posture, findings)
+    }
+}
+
+@Composable
+private fun UserRiskStoryPanel(assessment: AuraAssessment) {
+    val story = assessment.userRiskStory
+    Text(story.headline, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    Text(story.primaryReason, style = MaterialTheme.typography.bodyMedium)
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text = "next=${story.recommendedNextStep}",
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace
+    )
+    story.whatWasObserved.take(4).forEach { observed ->
+        Text(
+            text = "+ $observed",
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -380,10 +408,43 @@ private fun EvidenceGraphSummary(graph: EvidenceGraph) {
 }
 
 @Composable
-private fun DefensiveFindingsList(findings: List<DefensiveSurfaceFinding>) {
-    if (findings.isEmpty()) return
+private fun DecisionTraceSummary(assessment: AuraAssessment) {
+    val trace = assessment.decisionTrace
     Spacer(Modifier.height(12.dp))
-    Text("Defensive findings", style = MaterialTheme.typography.titleSmall)
+    Text("Decision trace", style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = "policy=${trace.policyVersion} selected=${trace.selectedDecision} matched=${trace.evaluatedRules.count { it.matched }} invariants=${trace.invariantChecks.count { it.passed }}/${trace.invariantChecks.size}",
+        style = MaterialTheme.typography.bodySmall,
+        fontFamily = FontFamily.Monospace
+    )
+    trace.evaluatedRules.filter { it.matched }.take(3).forEach { rule ->
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "${rule.ruleId}: ${rule.explanation}",
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+    trace.counterfactuals.firstOrNull()?.let { counterfactual ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "counterfactual ${counterfactual.targetDecision}: ${counterfactual.requiredChanges.joinToString("; ")}",
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun DefensivePosturePanel(
+    posture: DefensivePostureSummary?,
+    findings: List<DefensiveSurfaceFinding>
+) {
+    Spacer(Modifier.height(12.dp))
+    Text("Defensive posture", style = MaterialTheme.typography.titleSmall)
+    Text(
+        text = posture?.userFacingSummary ?: "No defensive-surface weakness was observed by the current metadata-only audit.",
+        style = MaterialTheme.typography.bodySmall
+    )
+    if (findings.isEmpty()) return
     findings.take(8).forEach { finding ->
         Spacer(Modifier.height(6.dp))
         Text(

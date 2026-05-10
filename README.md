@@ -35,6 +35,9 @@ AURA uses two flavor dimensions:
 
 `BLUE` findings are expert/platform audit findings, never primary panic alerts.
 Unknown evidence increases uncertainty; it does not imply maliciousness.
+Each assessment exports a `DecisionTrace`, a `UserRiskStory`, and a separate
+defensive-posture summary so threat decisions are not conflated with app
+hardening findings.
 
 See:
 

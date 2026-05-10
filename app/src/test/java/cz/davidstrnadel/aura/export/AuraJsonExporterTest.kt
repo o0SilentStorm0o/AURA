@@ -1,6 +1,7 @@
 package cz.davidstrnadel.aura.export
 
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
+import cz.davidstrnadel.aura.reasoning.DefensivePostureAssessor
 import cz.davidstrnadel.aura.reasoning.DefensiveSurfaceAuditor
 import cz.davidstrnadel.aura.reasoning.TestSnapshots
 import cz.davidstrnadel.aura.storage.ScanHistoryReport
@@ -21,6 +22,10 @@ class AuraJsonExporterTest {
             )
         )
         val defensiveFindings = DefensiveSurfaceAuditor().audit(listOf(assessment))
+        val defensivePostures = DefensivePostureAssessor().summarize(
+            assessments = listOf(assessment),
+            findings = defensiveFindings
+        )
         val export = AuraScanExport(
             schemaVersion = 1,
             scanId = "scan",
@@ -29,6 +34,7 @@ class AuraJsonExporterTest {
             assessments = listOf(assessment),
             temporalEpisodes = emptyList(),
             defensiveSurfaceFindings = defensiveFindings,
+            defensivePostures = defensivePostures,
             scanHistory = ScanHistoryReport(
                 schemaVersion = 1,
                 retainedScanCount = 1,
@@ -47,9 +53,12 @@ class AuraJsonExporterTest {
         assertTrue(json.contains("\"riskVector\""))
         assertTrue(json.contains("\"decision\""))
         assertTrue(json.contains("\"recommendedActions\""))
+        assertTrue(json.contains("\"decisionTrace\""))
+        assertTrue(json.contains("\"userRiskStory\""))
         assertTrue(json.contains("\"evidenceGraph\""))
         assertTrue(json.contains("\"edges\""))
         assertTrue(json.contains("\"defensiveSurfaceFindings\""))
+        assertTrue(json.contains("\"defensivePostures\""))
         assertTrue(json.contains("\"scanHistory\""))
         assertTrue(json.contains("\"packagesNewInThisScan\""))
     }

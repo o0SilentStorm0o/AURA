@@ -31,10 +31,38 @@ active risky capability state. They are not free-form detector output:
 - `GREEN` actions generally state that no user action is required for the
   observed scan evidence.
 
+Each assessment exports a `DecisionTrace`:
+
+- `policyVersion`
+- evaluated policy rules and whether each matched
+- selected decision
+- rejected decision alternatives
+- threshold inputs
+- counterfactuals for how the decision could change
+- invariant checks such as `BLUE_MUST_NOT_BE_PRIMARY_USER_ALERT` and
+  `RED_REQUIRES_ACTIVE_RISKY_CAPABILITY`
+
+This trace is intended to make the decision reproducible and explainable
+without turning unknown evidence into maliciousness.
+
+Each assessment also exports a `UserRiskStory`. This is a user-facing
+translation of the same structured evidence:
+
+- what AURA observed
+- what AURA did not observe
+- why it matters
+- what the recommended next step is
+- what limitations remain because AURA is a no-root agent
+
 Each assessment also exports an `evidenceGraph` with typed nodes and edges.
 The graph links the app, machine-readable evidence, role/provenance inference,
 risk vector, final decision, and recommended actions. It is deterministic and
 derived from already exported evidence IDs; it is not an additional detector.
+
+Threat decisions and defensive posture are separate. A `GREEN` threat decision
+means AURA did not find concrete abuse evidence for the app in the current
+scan; it does not mean that the app has perfect defensive design. Defensive
+surface findings are summarized separately as defensive posture.
 
 Primary evaluation metrics:
 
@@ -43,3 +71,4 @@ Primary evaluation metrics:
 - `red_recall_controlled_abuse`
 - `blue_platform_audit_separation`
 - `abstention_correctness`
+- `decision_trace_completeness`

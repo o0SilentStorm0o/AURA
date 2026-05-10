@@ -81,6 +81,12 @@ enum class DefensiveFindingSeverity {
     HIGH
 }
 
+enum class DefensivePostureClass {
+    NO_OBSERVED_WEAKNESS,
+    REVIEW_RECOMMENDED,
+    WEAK_DEFENSIVE_SURFACE
+}
+
 enum class RemediationScope {
     USER,
     EXPERT_AUDIT,

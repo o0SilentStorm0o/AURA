@@ -37,6 +37,12 @@ The output includes three levels:
 - `rows[].evidenceGraphNodeCount` and `rows[].evidenceGraphEdgeCount`:
   structural checks that exported decisions remain decomposable into graph
   evidence.
+- `rows[].decisionTracePolicyVersion`,
+  `rows[].decisionTraceMatchedRuleCount`, and
+  `metrics.decision_trace_completeness`: checks that decisions include a
+  replayable trace and user-facing risk story.
+- `rows[].defensivePostureClass`: separates threat decisions from defensive
+  surface posture.
 
 Labelled defensive-surface expectations are reported with
 `defensive_surface_recall`. These evaluate top-level

@@ -19,6 +19,9 @@ python3 tools/expert_labels/create_review_packet.py \
 The CSV is meant for human review. The labels template is intentionally marked
 with `reviewStatus: UNLABELED`; the evaluator skips those rows until a reviewer
 changes them to `REVIEWED` or `NEEDS_DISCUSSION` and fills in the label fields.
+The CSV includes the user risk story, matched policy rules, counterfactuals,
+evidence graph counts, defensive posture, and top evidence summary so reviewers
+can judge both the final decision and the reasoning path.
 
 Validate a label file:
 

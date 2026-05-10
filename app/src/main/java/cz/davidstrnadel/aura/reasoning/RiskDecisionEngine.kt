@@ -3,21 +3,30 @@ package cz.davidstrnadel.aura.reasoning
 import cz.davidstrnadel.aura.core.ActionabilityClass
 import cz.davidstrnadel.aura.core.AuraDecision
 import cz.davidstrnadel.aura.core.DecisionColor
+import cz.davidstrnadel.aura.core.DecisionCounterfactual
+import cz.davidstrnadel.aura.core.DecisionInvariantCheck
+import cz.davidstrnadel.aura.core.DecisionTrace
 import cz.davidstrnadel.aura.core.EvidenceItem
 import cz.davidstrnadel.aura.core.EvidenceSource
+import cz.davidstrnadel.aura.core.EvaluatedPolicyRule
 import cz.davidstrnadel.aura.core.ObservedAppSnapshot
 import cz.davidstrnadel.aura.core.ObservabilityState
 import cz.davidstrnadel.aura.core.ProvenanceClass
 import cz.davidstrnadel.aura.core.RecommendedAction
+import cz.davidstrnadel.aura.core.RejectedDecisionAlternative
 import cz.davidstrnadel.aura.core.RemediationScope
 import cz.davidstrnadel.aura.core.RiskVector
 import cz.davidstrnadel.aura.core.RoleCategory
+import cz.davidstrnadel.aura.core.UserRiskStory
 import cz.davidstrnadel.aura.core.clampedScore
+import java.util.Locale
 import kotlin.math.max
 
 data class RiskDecisionResult(
     val riskVector: RiskVector,
     val decision: AuraDecision,
+    val decisionTrace: DecisionTrace,
+    val userRiskStory: UserRiskStory,
     val evidence: List<EvidenceItem>
 )
 
@@ -58,8 +67,81 @@ class RiskDecisionEngine(
             humanExplanation = "AURA separates capability exposure, role legitimacy, provenance confidence, abuse evidence, user actionability, and uncertainty."
         )
 
+        val ruleInputs = ruleInputs(
+            harm = harm,
+            legitimacy = legitimacy,
+            abuseEvidence = abuseEvidence,
+            provenanceConfidence = provenanceConfidence,
+            actionability = actionability,
+            uncertainty = uncertainty,
+            activeRiskyCapability = activeRiskyCapability,
+            role = role,
+            provenanceClass = provenanceClass,
+            isSystemApp = snapshot.isSystemApp
+        )
+        val redMatched = harm >= 0.70 &&
+            abuseEvidence >= 0.65 &&
+            legitimacy < 0.50 &&
+            activeRiskyCapability &&
+            actionability >= 0.65
+        val greenLowExposurePlatformMatched = harm < 0.20 && snapshot.isSystemApp && abuseEvidence < 0.35
+        val grayUnknownLowExposureMatched = harm < 0.30 &&
+            abuseEvidence < 0.35 &&
+            role in setOf(RoleCategory.UNKNOWN_SIDELOAD, RoleCategory.UNKNOWN_UTILITY) &&
+            provenanceClass in setOf(ProvenanceClass.UNKNOWN_SIDELOAD, ProvenanceClass.UNKNOWN)
+        val greenExpectedRoleMatched = legitimacy >= 0.70 && provenanceConfidence >= 0.62 && abuseEvidence < 0.35
+        val bluePlatformAuditMatched = harm >= 0.55 &&
+            actionability < 0.55 &&
+            provenanceClass in platformAuditClasses &&
+            (legitimacy < 0.75 || provenanceConfidence < 0.65)
+        val grayUncertaintyMatched = uncertainty >= 0.62 && abuseEvidence < 0.45
+        val evaluatedRules = listOf(
+            policyRule(
+                "RED_USER_ACTIONABLE_THREAT",
+                "RED user-actionable threat",
+                redMatched,
+                ruleInputs,
+                "Requires high harm, concrete abuse evidence, low role legitimacy, active risky capability, and high user actionability."
+            ),
+            policyRule(
+                "GREEN_LOW_EXPOSURE_PLATFORM",
+                "GREEN low-exposure platform component",
+                greenLowExposurePlatformMatched,
+                ruleInputs,
+                "Low-exposure system components without abuse evidence are not user alerts."
+            ),
+            policyRule(
+                "GRAY_UNKNOWN_LOW_EXPOSURE",
+                "GRAY unknown low-exposure app",
+                grayUnknownLowExposureMatched,
+                ruleInputs,
+                "Unknown provenance without active risky capability is uncertainty, not maliciousness."
+            ),
+            policyRule(
+                "GREEN_EXPECTED_ROLE",
+                "GREEN expected for role",
+                greenExpectedRoleMatched,
+                ruleInputs,
+                "Capabilities fit the inferred role and abuse evidence is low."
+            ),
+            policyRule(
+                "BLUE_PLATFORM_AUDIT",
+                "BLUE platform/OEM audit finding",
+                bluePlatformAuditMatched,
+                ruleInputs,
+                "High exposure with low user actionability is separated from the primary panic queue."
+            ),
+            policyRule(
+                "GRAY_HIGH_UNCERTAINTY",
+                "GRAY high uncertainty",
+                grayUncertaintyMatched,
+                ruleInputs,
+                "High uncertainty without concrete abuse evidence should abstain."
+            )
+        )
+
         val baseDecision = when {
-            harm >= 0.70 && abuseEvidence >= 0.65 && legitimacy < 0.50 && activeRiskyCapability && actionability >= 0.65 ->
+            redMatched ->
                 AuraDecision(
                     color = DecisionColor.RED,
                     userAlert = true,
@@ -69,7 +151,7 @@ class RiskDecisionEngine(
                     explanation = "High capability exposure is paired with concrete abuse evidence, low role legitimacy, active risky capability, and high user actionability.",
                     evidenceIds = listOf(evidence.evidenceId)
                 )
-            harm < 0.20 && snapshot.isSystemApp && abuseEvidence < 0.35 ->
+            greenLowExposurePlatformMatched ->
                 AuraDecision(
                     color = DecisionColor.GREEN,
                     userAlert = false,
@@ -79,10 +161,7 @@ class RiskDecisionEngine(
                     explanation = "This system component has low observed capability exposure and no concrete abuse evidence.",
                     evidenceIds = listOf(evidence.evidenceId)
                 )
-            harm < 0.30 &&
-                abuseEvidence < 0.35 &&
-                role in setOf(RoleCategory.UNKNOWN_SIDELOAD, RoleCategory.UNKNOWN_UTILITY) &&
-                provenanceClass in setOf(ProvenanceClass.UNKNOWN_SIDELOAD, ProvenanceClass.UNKNOWN) ->
+            grayUnknownLowExposureMatched ->
                 AuraDecision(
                     color = DecisionColor.GRAY,
                     userAlert = false,
@@ -92,7 +171,7 @@ class RiskDecisionEngine(
                     explanation = "Unknown provenance without active risky capability or concrete abuse evidence is treated as uncertainty, not maliciousness.",
                     evidenceIds = listOf(evidence.evidenceId)
                 )
-            legitimacy >= 0.70 && provenanceConfidence >= 0.62 && abuseEvidence < 0.35 ->
+            greenExpectedRoleMatched ->
                 AuraDecision(
                     color = DecisionColor.GREEN,
                     userAlert = false,
@@ -102,10 +181,7 @@ class RiskDecisionEngine(
                     explanation = "Observed capabilities are plausible for the inferred role and no abuse evidence is present.",
                     evidenceIds = listOf(evidence.evidenceId)
                 )
-            harm >= 0.55 &&
-                actionability < 0.55 &&
-                provenanceClass in platformAuditClasses &&
-                (legitimacy < 0.75 || provenanceConfidence < 0.65) ->
+            bluePlatformAuditMatched ->
                 AuraDecision(
                     color = DecisionColor.BLUE,
                     userAlert = false,
@@ -115,7 +191,7 @@ class RiskDecisionEngine(
                     explanation = "Exposure may matter to a researcher or administrator, but this is not an immediate user panic alert.",
                     evidenceIds = listOf(evidence.evidenceId)
                 )
-            uncertainty >= 0.62 && abuseEvidence < 0.45 ->
+            grayUncertaintyMatched ->
                 AuraDecision(
                     color = DecisionColor.GRAY,
                     userAlert = false,
@@ -145,9 +221,329 @@ class RiskDecisionEngine(
                 activeRiskyCapability = activeRiskyCapability
             )
         )
+        val decisionTrace = decisionTrace(
+            decision = decision,
+            evaluatedRules = evaluatedRules,
+            thresholdInputs = ruleInputs,
+            activeRiskyCapability = activeRiskyCapability,
+            abuseEvidence = abuseEvidence,
+            legitimacy = legitimacy,
+            actionability = actionability,
+            uncertainty = uncertainty,
+            snapshot = snapshot
+        )
+        val userRiskStory = userRiskStory(
+            snapshot = snapshot,
+            decision = decision,
+            role = role,
+            provenanceClass = provenanceClass,
+            vector = vector,
+            activeRiskyCapability = activeRiskyCapability
+        )
 
-        return RiskDecisionResult(vector, decision, listOf(evidence))
+        return RiskDecisionResult(vector, decision, decisionTrace, userRiskStory, listOf(evidence))
     }
+
+    private fun ruleInputs(
+        harm: Double,
+        legitimacy: Double,
+        abuseEvidence: Double,
+        provenanceConfidence: Double,
+        actionability: Double,
+        uncertainty: Double,
+        activeRiskyCapability: Boolean,
+        role: RoleCategory,
+        provenanceClass: ProvenanceClass,
+        isSystemApp: Boolean
+    ): Map<String, String> = mapOf(
+        "harm" to harm.scoreText(),
+        "legitimacy" to legitimacy.scoreText(),
+        "abuseEvidence" to abuseEvidence.scoreText(),
+        "provenanceConfidence" to provenanceConfidence.scoreText(),
+        "actionability" to actionability.scoreText(),
+        "uncertainty" to uncertainty.scoreText(),
+        "activeRiskyCapability" to activeRiskyCapability.toString(),
+        "role" to role.name,
+        "provenanceClass" to provenanceClass.name,
+        "isSystemApp" to isSystemApp.toString()
+    )
+
+    private fun policyRule(
+        ruleId: String,
+        ruleName: String,
+        matched: Boolean,
+        inputs: Map<String, String>,
+        explanation: String
+    ): EvaluatedPolicyRule =
+        EvaluatedPolicyRule(
+            ruleId = ruleId,
+            ruleName = ruleName,
+            matched = matched,
+            inputs = inputs,
+            explanation = explanation
+        )
+
+    private fun decisionTrace(
+        decision: AuraDecision,
+        evaluatedRules: List<EvaluatedPolicyRule>,
+        thresholdInputs: Map<String, String>,
+        activeRiskyCapability: Boolean,
+        abuseEvidence: Double,
+        legitimacy: Double,
+        actionability: Double,
+        uncertainty: Double,
+        snapshot: ObservedAppSnapshot
+    ): DecisionTrace =
+        DecisionTrace(
+            policyVersion = assets.decisionPolicyVersion,
+            evaluatedRules = evaluatedRules,
+            selectedDecision = decision.color,
+            rejectedAlternatives = rejectedAlternatives(decision.color, evaluatedRules),
+            thresholdInputs = thresholdInputs,
+            counterfactuals = counterfactuals(decision.color, activeRiskyCapability, snapshot),
+            invariantChecks = invariantChecks(
+                decision = decision,
+                activeRiskyCapability = activeRiskyCapability,
+                abuseEvidence = abuseEvidence,
+                legitimacy = legitimacy,
+                actionability = actionability,
+                uncertainty = uncertainty,
+                snapshot = snapshot
+            )
+        )
+
+    private fun rejectedAlternatives(
+        selected: DecisionColor,
+        evaluatedRules: List<EvaluatedPolicyRule>
+    ): List<RejectedDecisionAlternative> =
+        evaluatedRules
+            .filter { !it.matched }
+            .mapNotNull { rule ->
+                val color = when {
+                    rule.ruleId.startsWith("RED") -> DecisionColor.RED
+                    rule.ruleId.startsWith("GREEN") -> DecisionColor.GREEN
+                    rule.ruleId.startsWith("BLUE") -> DecisionColor.BLUE
+                    rule.ruleId.startsWith("GRAY") -> DecisionColor.GRAY
+                    else -> null
+                }
+                color?.takeIf { it != selected }?.let {
+                    RejectedDecisionAlternative(
+                        decisionColor = it,
+                        reason = "Policy rule ${rule.ruleId} did not match.",
+                        blockingInputs = rule.inputs
+                    )
+                }
+            }
+            .distinctBy { it.decisionColor }
+
+    private fun counterfactuals(
+        selected: DecisionColor,
+        activeRiskyCapability: Boolean,
+        snapshot: ObservedAppSnapshot
+    ): List<DecisionCounterfactual> = when (selected) {
+        DecisionColor.RED -> listOf(
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.YELLOW,
+                requiredChanges = buildList {
+                    if (activeRiskyCapability) {
+                        add("Disable active risky special access such as Accessibility, notification listener, or overlay.")
+                    }
+                    if (!snapshot.isSystemApp) {
+                        add("Uninstall the app or remove the user-controlled risky capability.")
+                    }
+                }.ifEmpty { listOf("Remove concrete abuse evidence while preserving the raw export for review.") },
+                userActionable = true
+            ),
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.GRAY,
+                requiredChanges = listOf("Remove active abuse evidence while leaving provenance or role evidence unresolved."),
+                userActionable = false
+            )
+        )
+        DecisionColor.BLUE -> listOf(
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.RED,
+                requiredChanges = listOf(
+                    "Observe concrete abuse evidence.",
+                    "Observe high user actionability rather than platform-only actionability.",
+                    "Observe an active risky capability."
+                ),
+                userActionable = false
+            )
+        )
+        DecisionColor.GRAY -> listOf(
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.YELLOW,
+                requiredChanges = listOf("Collect additional role, provenance, or special-access evidence."),
+                userActionable = true
+            )
+        )
+        DecisionColor.GREEN -> listOf(
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.YELLOW,
+                requiredChanges = listOf("Observe a role/capability mismatch or weaker provenance evidence."),
+                userActionable = false
+            )
+        )
+        DecisionColor.YELLOW -> listOf(
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.RED,
+                requiredChanges = listOf(
+                    "Observe concrete abuse evidence.",
+                    "Observe active risky capability.",
+                    "Confirm that the user can revoke or remove the risky capability."
+                ),
+                userActionable = false
+            ),
+            DecisionCounterfactual(
+                targetDecision = DecisionColor.GREEN,
+                requiredChanges = listOf("Increase role legitimacy and keep abuse evidence low."),
+                userActionable = false
+            )
+        )
+    }
+
+    private fun invariantChecks(
+        decision: AuraDecision,
+        activeRiskyCapability: Boolean,
+        abuseEvidence: Double,
+        legitimacy: Double,
+        actionability: Double,
+        uncertainty: Double,
+        snapshot: ObservedAppSnapshot
+    ): List<DecisionInvariantCheck> = listOf(
+        DecisionInvariantCheck(
+            invariantId = "UNKNOWN_EVIDENCE_MUST_NOT_CREATE_RED",
+            passed = decision.color != DecisionColor.RED ||
+                (abuseEvidence >= 0.65 && legitimacy < 0.50 && actionability >= 0.65),
+            explanation = "Unknown evidence can increase uncertainty, but RED requires concrete abuse evidence, low legitimacy, and high actionability."
+        ),
+        DecisionInvariantCheck(
+            invariantId = "BLUE_MUST_NOT_BE_PRIMARY_USER_ALERT",
+            passed = decision.color != DecisionColor.BLUE || !decision.userAlert,
+            explanation = "BLUE findings are expert/platform audit findings and must stay out of the primary panic queue."
+        ),
+        DecisionInvariantCheck(
+            invariantId = "RED_REQUIRES_ACTIVE_RISKY_CAPABILITY",
+            passed = decision.color != DecisionColor.RED || activeRiskyCapability,
+            explanation = "Declared-only risky capability is not enough for RED without an active risky capability."
+        ),
+        DecisionInvariantCheck(
+            invariantId = "KNOWN_PACKAGE_IS_NOT_WHITELIST",
+            passed = true,
+            explanation = "Known package or provenance evidence contributes confidence but never bypasses risk evaluation."
+        ),
+        DecisionInvariantCheck(
+            invariantId = "SYSTEM_APP_IS_NOT_AUTOMATICALLY_GREEN",
+            passed = !snapshot.isSystemApp || decision.color != DecisionColor.GREEN || abuseEvidence < 0.35 || uncertainty < 0.80,
+            explanation = "System app status is treated as provenance/context evidence, not as a hard safety whitelist."
+        )
+    )
+
+    private fun userRiskStory(
+        snapshot: ObservedAppSnapshot,
+        decision: AuraDecision,
+        role: RoleCategory,
+        provenanceClass: ProvenanceClass,
+        vector: RiskVector,
+        activeRiskyCapability: Boolean
+    ): UserRiskStory {
+        val activeSpecialAccess = activeSpecialAccessNames(snapshot)
+        val commonNotObserved = listOf(
+            "AURA did not read screen contents.",
+            "AURA did not read notification contents.",
+            "AURA did not inspect network payloads.",
+            "AURA did not perform root or kernel forensics."
+        )
+        return when (decision.color) {
+            DecisionColor.RED -> UserRiskStory(
+                headline = "Action required",
+                severityLabel = "High user-actionable risk",
+                primaryReason = "An app with unclear role/provenance has active risky access that can affect other apps.",
+                whatWasObserved = listOf(
+                    "Role: ${role.name}",
+                    "Provenance: ${provenanceClass.name}",
+                    "Active special access: ${activeSpecialAccess.ifEmpty { listOf("none") }.joinToString(", ")}",
+                    "Risk vector: H=${vector.harm.scoreText()} E=${vector.abuseEvidence.scoreText()} A=${vector.actionability.scoreText()}"
+                ),
+                whatWasNotObserved = commonNotObserved,
+                whyItMatters = "Active Accessibility, notification listener, or overlay access can become dangerous when paired with unclear provenance and low role legitimacy.",
+                recommendedNextStep = "Disable the risky special access or uninstall the app if it is not needed.",
+                confidenceText = "AURA has concrete active-capability evidence for this decision.",
+                limitationsText = "This is not a malware payload verdict; it is a no-root risk and actionability assessment."
+            )
+            DecisionColor.BLUE -> UserRiskStory(
+                headline = "Technical audit finding",
+                severityLabel = "Expert/platform review",
+                primaryReason = "The app has meaningful platform exposure, but ordinary user action is limited.",
+                whatWasObserved = listOf(
+                    "Role: ${role.name}",
+                    "Provenance: ${provenanceClass.name}",
+                    "User actionability is low.",
+                    "Threat alert queue remains silent."
+                ),
+                whatWasNotObserved = commonNotObserved,
+                whyItMatters = "Platform and OEM components can have high exposure without being appropriate user panic alerts.",
+                recommendedNextStep = "Keep the local export for expert or platform review; do not remove system components casually.",
+                confidenceText = "AURA separates platform audit value from immediate user danger.",
+                limitationsText = "No-root apps cannot verify hidden OEM behavior or privileged allowlists completely."
+            )
+            DecisionColor.GRAY -> UserRiskStory(
+                headline = "Insufficient evidence",
+                severityLabel = "Uncertainty",
+                primaryReason = "AURA does not have enough observable evidence to make a stronger claim.",
+                whatWasObserved = listOf(
+                    "Role: ${role.name}",
+                    "Provenance: ${provenanceClass.name}",
+                    "Uncertainty: ${vector.uncertainty.scoreText()}",
+                    "Active risky capability: $activeRiskyCapability"
+                ),
+                whatWasNotObserved = commonNotObserved,
+                whyItMatters = "Unknown evidence is not treated as malicious by default.",
+                recommendedNextStep = "Collect more context, review the app source, or rescan after optional research grants if appropriate.",
+                confidenceText = "AURA is intentionally abstaining instead of overclaiming.",
+                limitationsText = "Missing evidence may reflect Android sandbox limits or flavor-specific package visibility."
+            )
+            DecisionColor.GREEN -> UserRiskStory(
+                headline = "No user action required",
+                severityLabel = "Expected for role",
+                primaryReason = "Observed capabilities fit the inferred role and concrete abuse evidence is low.",
+                whatWasObserved = listOf(
+                    "Role: ${role.name}",
+                    "Provenance: ${provenanceClass.name}",
+                    "Legitimacy: ${vector.legitimacy.scoreText()}",
+                    "Abuse evidence: ${vector.abuseEvidence.scoreText()}"
+                ),
+                whatWasNotObserved = commonNotObserved,
+                whyItMatters = "Powerful permissions can be normal for apps such as cameras, maps, keyboards, or system components.",
+                recommendedNextStep = "No immediate user action is recommended from this scan evidence.",
+                confidenceText = "AURA found no concrete abuse evidence for the current decision.",
+                limitationsText = "GREEN threat status does not mean the app has perfect defensive posture."
+            )
+            DecisionColor.YELLOW -> UserRiskStory(
+                headline = "Review recommended",
+                severityLabel = "Needs review",
+                primaryReason = "AURA found a capability, role, or provenance mismatch that does not justify a panic alert.",
+                whatWasObserved = listOf(
+                    "Role: ${role.name}",
+                    "Provenance: ${provenanceClass.name}",
+                    "Harm: ${vector.harm.scoreText()}",
+                    "Legitimacy: ${vector.legitimacy.scoreText()}"
+                ),
+                whatWasNotObserved = commonNotObserved,
+                whyItMatters = "Some elevated capabilities are legitimate, but the current evidence deserves user or expert review.",
+                recommendedNextStep = "Review permissions, special access, installer source, and whether the app is still needed.",
+                confidenceText = "AURA has review-worthy evidence but not enough concrete abuse evidence for RED.",
+                limitationsText = "Manual context may be needed to distinguish unusual-but-legitimate apps from unwanted apps."
+            )
+        }
+    }
+
+    private fun activeSpecialAccessNames(snapshot: ObservedAppSnapshot): List<String> =
+        snapshot.specialAccess
+            .filterValues { it == ObservabilityState.OBSERVED_ENABLED }
+            .keys
+            .sorted()
 
     private fun harmPotential(snapshot: ObservedAppSnapshot): Double {
         val permissionScore = snapshot.requestedPermissions.maxOfOrNull { assets.permissionHarm[it] ?: 0.0 } ?: 0.0
@@ -389,4 +785,6 @@ class RiskDecisionEngine(
 
         val permissionHarm = AuraRuleAssets.DEFAULT_PERMISSION_HARM
     }
+
+    private fun Double.scoreText(): String = String.format(Locale.US, "%.2f", this)
 }

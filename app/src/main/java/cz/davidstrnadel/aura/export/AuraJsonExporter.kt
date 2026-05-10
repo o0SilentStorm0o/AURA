@@ -4,6 +4,7 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import cz.davidstrnadel.aura.core.AuraAssessment
+import cz.davidstrnadel.aura.core.DefensivePostureSummary
 import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
 import cz.davidstrnadel.aura.core.TemporalEpisode
 import cz.davidstrnadel.aura.storage.ScanHistoryReport
@@ -17,6 +18,7 @@ data class AuraScanExport(
     val assessments: List<AuraAssessment>,
     val temporalEpisodes: List<TemporalEpisode>,
     val defensiveSurfaceFindings: List<DefensiveSurfaceFinding> = emptyList(),
+    val defensivePostures: List<DefensivePostureSummary> = emptyList(),
     val scanHistory: ScanHistoryReport? = null
 )
 

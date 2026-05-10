@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "policyVersion": "0.1.0",
   "policy": {
     "RED": "high harm + high abuse evidence + low role legitimacy + active risky capability + high user actionability",
     "BLUE": "platform/OEM/security research audit finding; never primary panic queue",

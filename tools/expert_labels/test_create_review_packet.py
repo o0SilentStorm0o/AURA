@@ -39,6 +39,23 @@ def assessment(package_name: str = "com.example.app") -> dict:
                 {"actionId": "uninstall_or_disable_app"},
             ],
         },
+        "decisionTrace": {
+            "policyVersion": "0.1.0",
+            "evaluatedRules": [
+                {"ruleId": "RED_USER_ACTIONABLE_THREAT", "matched": True},
+                {"ruleId": "BLUE_PLATFORM_AUDIT", "matched": False},
+            ],
+            "counterfactuals": [
+                {
+                    "targetDecision": "YELLOW",
+                    "requiredChanges": ["Disable active risky special access."],
+                }
+            ],
+        },
+        "userRiskStory": {
+            "headline": "Action required",
+            "primaryReason": "Active risky access with unclear provenance.",
+        },
         "evidence": [
             {
                 "source": "ROLE_RULE",
@@ -65,6 +82,12 @@ class ReviewPacketTest(unittest.TestCase):
                     "findingType": "DEBUGGABLE_SENSITIVE_APP",
                 }
             ],
+            "defensivePostures": [
+                {
+                    "packageName": "com.example.app",
+                    "postureClass": "WEAK_DEFENSIVE_SURFACE",
+                }
+            ],
         }
 
         rows = build_rows(export)
@@ -77,6 +100,11 @@ class ReviewPacketTest(unittest.TestCase):
             rows[0]["recommendedActions"],
         )
         self.assertEqual("DEBUGGABLE_SENSITIVE_APP", rows[0]["defensiveFindings"])
+        self.assertEqual("WEAK_DEFENSIVE_SURFACE", rows[0]["defensivePosture"])
+        self.assertEqual("Action required", rows[0]["riskStoryHeadline"])
+        self.assertEqual("0.1.0", rows[0]["decisionTracePolicyVersion"])
+        self.assertEqual("RED_USER_ACTIONABLE_THREAT", rows[0]["matchedPolicyRules"])
+        self.assertIn("YELLOW", rows[0]["counterfactuals"])
         self.assertEqual(1, rows[0]["evidenceGraphNodes"])
         self.assertEqual(1, rows[0]["evidenceGraphEdges"])
 

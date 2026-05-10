@@ -37,6 +37,8 @@ class AuraAssessmentEngine(
             provenance = provenance.provenance,
             riskVector = risk.riskVector,
             decision = risk.decision,
+            decisionTrace = risk.decisionTrace,
+            userRiskStory = risk.userRiskStory,
             evidenceGraph = evidenceGraph
         )
     }

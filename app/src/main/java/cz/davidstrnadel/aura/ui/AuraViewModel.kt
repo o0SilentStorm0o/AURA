@@ -7,10 +7,12 @@ import cz.davidstrnadel.aura.collector.AppSnapshotCollector
 import cz.davidstrnadel.aura.core.AuraAssessment
 import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
 import cz.davidstrnadel.aura.core.DecisionColor
+import cz.davidstrnadel.aura.core.DefensivePostureSummary
 import cz.davidstrnadel.aura.export.AuraJsonExporter
 import cz.davidstrnadel.aura.export.AuraScanExport
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
 import cz.davidstrnadel.aura.reasoning.AuraRuleAssets
+import cz.davidstrnadel.aura.reasoning.DefensivePostureAssessor
 import cz.davidstrnadel.aura.reasoning.DefensiveSurfaceAuditor
 import cz.davidstrnadel.aura.reasoning.TemporalEpisodeDetector
 import cz.davidstrnadel.aura.storage.ScanHistoryReport
@@ -28,6 +30,7 @@ data class AuraUiState(
     val scanId: String = "",
     val assessments: List<AuraAssessment> = emptyList(),
     val defensiveSurfaceFindings: List<DefensiveSurfaceFinding> = emptyList(),
+    val defensivePostures: List<DefensivePostureSummary> = emptyList(),
     val scanHistory: ScanHistoryReport? = null,
     val exportPreview: String = "",
     val exportPath: String = "",
@@ -45,6 +48,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     private val collector = AppSnapshotCollector(application)
     private val assessmentEngine = AuraAssessmentEngine.fromAssets(AuraRuleAssets.fromContext(application))
     private val defensiveSurfaceAuditor = DefensiveSurfaceAuditor()
+    private val defensivePostureAssessor = DefensivePostureAssessor()
     private val temporalEpisodeDetector = TemporalEpisodeDetector()
     private val snapshotHistoryStore = SnapshotHistoryStore.fromContext(application)
     private val exporter = AuraJsonExporter()
@@ -70,6 +74,10 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     .map { assessmentEngine.assess(it) }
                     .sortedWith(compareBy<AuraAssessment> { decisionRank(it) }.thenBy { it.snapshot.packageName })
                 val defensiveSurfaceFindings = defensiveSurfaceAuditor.audit(assessments)
+                val defensivePostures = defensivePostureAssessor.summarize(
+                    assessments = assessments,
+                    findings = defensiveSurfaceFindings
+                )
                 val flavor = assessments.firstOrNull()?.snapshot?.flavor.orEmpty()
                 val scanHistory = snapshotHistoryStore.appendScan(
                     assessments = assessments,
@@ -84,6 +92,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     assessments = assessments,
                     temporalEpisodes = temporalEpisodes,
                     defensiveSurfaceFindings = defensiveSurfaceFindings,
+                    defensivePostures = defensivePostures,
                     scanHistory = scanHistory
                 )
                 val json = exporter.toJson(export)
@@ -98,6 +107,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     scanId = scanId,
                     assessments = assessments,
                     defensiveSurfaceFindings = defensiveSurfaceFindings,
+                    defensivePostures = defensivePostures,
                     scanHistory = scanHistory,
                     exportPreview = json.take(1600),
                     exportPath = exportFile.absolutePath

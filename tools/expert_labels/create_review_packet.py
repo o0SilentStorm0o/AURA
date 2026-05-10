@@ -30,9 +30,15 @@ CSV_FIELDS = [
     "sourcePartition",
     "installerPackageName",
     "recommendedActions",
+    "riskStoryHeadline",
+    "riskStoryPrimaryReason",
+    "decisionTracePolicyVersion",
+    "matchedPolicyRules",
+    "counterfactuals",
     "evidenceGraphNodes",
     "evidenceGraphEdges",
     "evidenceSummary",
+    "defensivePosture",
     "defensiveFindings",
     "reviewerExpectedDecision",
     "reviewerControlledAbuse",
@@ -62,6 +68,13 @@ def defensive_findings_by_package(export: dict[str, Any]) -> dict[str, list[str]
     return output
 
 
+def defensive_postures_by_package(export: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        posture.get("packageName", ""): posture
+        for posture in export.get("defensivePostures", [])
+    }
+
+
 def evidence_summary(assessment: dict[str, Any], limit: int) -> str:
     entries = []
     for item in assessment.get("evidence", [])[:limit]:
@@ -82,9 +95,30 @@ def action_summary(assessment: dict[str, Any]) -> str:
     )
 
 
+def matched_rule_summary(assessment: dict[str, Any]) -> str:
+    return ";".join(
+        rule.get("ruleId", "")
+        for rule in assessment.get("decisionTrace", {}).get("evaluatedRules", [])
+        if rule.get("matched") is True and rule.get("ruleId")
+    )
+
+
+def counterfactual_summary(assessment: dict[str, Any]) -> str:
+    entries = []
+    for item in assessment.get("decisionTrace", {}).get("counterfactuals", []):
+        entries.append(
+            compact(
+                f"{item.get('targetDecision')}: "
+                f"{'; '.join(item.get('requiredChanges', []))}"
+            )
+        )
+    return " | ".join(entries)
+
+
 def row_for_assessment(
     assessment: dict[str, Any],
     findings_by_package: dict[str, list[str]],
+    postures_by_package: dict[str, dict[str, Any]],
     evidence_limit: int,
 ) -> dict[str, Any]:
     snapshot = assessment.get("snapshot", {})
@@ -93,7 +127,10 @@ def row_for_assessment(
     provenance = assessment.get("provenance", {})
     risk = assessment.get("riskVector", {})
     graph = assessment.get("evidenceGraph", {})
+    trace = assessment.get("decisionTrace", {})
+    story = assessment.get("userRiskStory", {})
     package_name = snapshot.get("packageName", "")
+    posture = postures_by_package.get(package_name, {})
     return {
         "packageName": package_name,
         "appLabel": snapshot.get("appLabel", ""),
@@ -114,9 +151,15 @@ def row_for_assessment(
         "sourcePartition": snapshot.get("rawFeatures", {}).get("sourcePartition", ""),
         "installerPackageName": snapshot.get("installerPackageName") or "",
         "recommendedActions": action_summary(assessment),
+        "riskStoryHeadline": story.get("headline", ""),
+        "riskStoryPrimaryReason": story.get("primaryReason", ""),
+        "decisionTracePolicyVersion": trace.get("policyVersion", ""),
+        "matchedPolicyRules": matched_rule_summary(assessment),
+        "counterfactuals": counterfactual_summary(assessment),
         "evidenceGraphNodes": len(graph.get("nodes", [])),
         "evidenceGraphEdges": len(graph.get("edges", [])),
         "evidenceSummary": evidence_summary(assessment, evidence_limit),
+        "defensivePosture": posture.get("postureClass", ""),
         "defensiveFindings": ";".join(sorted(findings_by_package.get(package_name, []))),
         "reviewerExpectedDecision": "",
         "reviewerControlledAbuse": "",
@@ -129,8 +172,9 @@ def row_for_assessment(
 
 def build_rows(export: dict[str, Any], evidence_limit: int = 3) -> list[dict[str, Any]]:
     findings = defensive_findings_by_package(export)
+    postures = defensive_postures_by_package(export)
     return [
-        row_for_assessment(assessment, findings, evidence_limit)
+        row_for_assessment(assessment, findings, postures, evidence_limit)
         for assessment in export.get("assessments", [])
     ]
 

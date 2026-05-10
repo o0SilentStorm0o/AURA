@@ -133,6 +133,10 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
     defensive_findings_by_package: dict[str, list[str]] = {}
     for finding in export.get("defensiveSurfaceFindings", []):
         defensive_findings_by_package.setdefault(finding["packageName"], []).append(finding["findingType"])
+    defensive_postures_by_package = {
+        posture.get("packageName"): posture
+        for posture in export.get("defensivePostures", [])
+    }
     rows: list[dict[str, Any]] = []
 
     for assessment in export.get("assessments", []):
@@ -147,6 +151,10 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
         ]
         package_name = snapshot["packageName"]
         label = labels.get(package_name)
+        decision_trace = assessment.get("decisionTrace", {})
+        invariant_checks = decision_trace.get("invariantChecks", [])
+        risk_story = assessment.get("userRiskStory", {})
+        defensive_posture = defensive_postures_by_package.get(package_name, {})
         row = {
             "packageName": package_name,
             "auraDecision": assessment.get("decision", {}).get("color"),
@@ -163,6 +171,20 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
             ),
             "evidenceGraphNodeCount": len(assessment.get("evidenceGraph", {}).get("nodes", [])),
             "evidenceGraphEdgeCount": len(assessment.get("evidenceGraph", {}).get("edges", [])),
+            "decisionTracePolicyVersion": decision_trace.get("policyVersion"),
+            "decisionTraceRuleCount": len(decision_trace.get("evaluatedRules", [])),
+            "decisionTraceMatchedRuleCount": sum(
+                1
+                for rule in decision_trace.get("evaluatedRules", [])
+                if rule.get("matched") is True
+            ),
+            "decisionTraceInvariantFailureCount": sum(
+                1
+                for invariant in invariant_checks
+                if invariant.get("passed") is False
+            ),
+            "riskStoryHeadline": risk_story.get("headline"),
+            "defensivePostureClass": defensive_posture.get("postureClass"),
             "defensiveFindingTypes": sorted(defensive_findings_by_package.get(package_name, [])),
             "baselines": [baseline.__dict__ for baseline in baselines],
         }
@@ -237,6 +259,13 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
         for row, finding in expected_defensive
         if finding in row.get("defensiveFindingTypes", [])
     )
+    trace_complete = sum(
+        1
+        for row in metric_rows
+        if row.get("decisionTraceRuleCount", 0) > 0
+        and row.get("riskStoryHeadline")
+        and row.get("evidenceGraphNodeCount", 0) > 0
+    )
 
     return {
         "non_actionable_critical_alert_rate": round(
@@ -260,6 +289,7 @@ def compute_metrics(rows: list[dict[str, Any]]) -> dict[str, float]:
             observed_expected_defensive / max(1, len(expected_defensive)),
             4,
         ),
+        "decision_trace_completeness": round(trace_complete / len(metric_rows), 4),
         "permission_only_critical_rate": round(permission_critical / len(metric_rows), 4),
         "aura_red_rate": round(aura_red / len(metric_rows), 4),
         "aura_blue_rate": round(aura_blue / len(metric_rows), 4),
