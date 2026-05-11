@@ -8,6 +8,7 @@ import cz.davidstrnadel.aura.core.AuraAssessment
 import cz.davidstrnadel.aura.core.DefensiveSurfaceFinding
 import cz.davidstrnadel.aura.core.DecisionColor
 import cz.davidstrnadel.aura.core.DefensivePostureSummary
+import cz.davidstrnadel.aura.core.TemporalEpisode
 import cz.davidstrnadel.aura.export.AuraJsonExporter
 import cz.davidstrnadel.aura.export.AuraScanExport
 import cz.davidstrnadel.aura.reasoning.AuraAssessmentEngine
@@ -29,6 +30,7 @@ data class AuraUiState(
     val loading: Boolean = true,
     val scanId: String = "",
     val assessments: List<AuraAssessment> = emptyList(),
+    val temporalEpisodes: List<TemporalEpisode> = emptyList(),
     val defensiveSurfaceFindings: List<DefensiveSurfaceFinding> = emptyList(),
     val defensivePostures: List<DefensivePostureSummary> = emptyList(),
     val scanHistory: ScanHistoryReport? = null,
@@ -41,6 +43,7 @@ data class AuraUiState(
     val grayCount: Int = assessments.count { it.decision.color == DecisionColor.GRAY }
     val yellowCount: Int = assessments.count { it.decision.color == DecisionColor.YELLOW }
     val greenCount: Int = assessments.count { it.decision.color == DecisionColor.GREEN }
+    val temporalEpisodeCount: Int = temporalEpisodes.size
     val defensiveFindingCount: Int = defensiveSurfaceFindings.size
 }
 
@@ -106,6 +109,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     loading = false,
                     scanId = scanId,
                     assessments = assessments,
+                    temporalEpisodes = temporalEpisodes,
                     defensiveSurfaceFindings = defensiveSurfaceFindings,
                     defensivePostures = defensivePostures,
                     scanHistory = scanHistory,

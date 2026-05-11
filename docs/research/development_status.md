@@ -40,15 +40,19 @@ This document separates what exists in the current Research MVP from planned wor
 - Export privacy redactor with `full_research`, `redacted_expert`, and
   `minimal_support` modes; report generation can now render from a privacy
   processed export and optionally save that redacted JSON artifact.
-- Research-console UI with decision counts, scan-history summary, selectable app
-  detail, risk-vector bars, actionability/provenance/role fields, first-class
-  evidence items, evidence graph summary, recommended actions, and per-app
-  defensive findings.
+- Explainability UI v1 with Basic, Power, and Research modes; action-first
+  dashboard; selectable app detail; user risk story; observed/not-observed
+  sections; recommended actions; scan-change summary; temporal episodes;
+  special-access states; risk-vector bars; baseline preview; decision trace;
+  counterfactual remediation; observability contract; evidence graph summary;
+  first-class evidence items; raw-feature preview; and separate defensive
+  posture findings.
 
 ## Not Yet Implemented
 
 - Interactive evidence graph visualization beyond the current typed node/edge summary.
-- Full counterfactual remediation UI beyond the current exported trace summary.
+- Automated user action launchers for settings/remediation; current UI explains
+  actions but does not deep-link into Android settings screens.
 - Automated PDF rendering beyond browser print/save-as-PDF from generated HTML.
 - Multi-reviewer adjudication workflow beyond generated packets, schema
   validation, and controlled-scenario labels.
