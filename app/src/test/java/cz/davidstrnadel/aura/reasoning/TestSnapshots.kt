@@ -61,6 +61,7 @@ object TestSnapshots {
         "foregroundSensitiveAppRecentlyObserved" to "false",
         "foregroundSensitiveAppPackage" to "",
         "foregroundSensitiveAppAgeMillis" to "",
+        "foregroundSensitiveAppSignalSource" to "",
         "allowBackup" to "false",
         "debuggable" to "false",
         "usesCleartextTraffic" to "false",

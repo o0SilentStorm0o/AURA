@@ -44,6 +44,7 @@ See:
 - [MIGRATION.md](MIGRATION.md)
 - [LIMITATIONS.md](LIMITATIONS.md)
 - [privacy_and_ethics.md](docs/research/privacy_and_ethics.md)
+- [export_privacy.md](docs/research/export_privacy.md)
 - [observability_matrix.md](docs/research/observability_matrix.md)
 - [risk_vector_model.md](docs/research/risk_vector_model.md)
 - [development_status.md](docs/research/development_status.md)

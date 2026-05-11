@@ -22,6 +22,9 @@ Examples:
 - `QUERY_ALL_PACKAGES`: `REQUIRES_RESEARCH_FLAVOR` in `playSafe`, available in `researchFull`.
 - Usage foreground history: `USER_GRANT_REQUIRED` by default, `OBSERVED_ENABLED` in
   `researchFull` only after explicit Usage Access/app-op grant, and
-  `REQUIRES_RESEARCH_FLAVOR` in `playSafe`.
+  `REQUIRES_RESEARCH_FLAVOR` in `playSafe`. When enabled, AURA first checks
+  `UsageEvents` and then falls back to aggregated `UsageStats` for the same
+  lookback window; the export records `foregroundSensitiveAppSignalSource` as
+  `usage_events` or `usage_stats_aggregate`.
 - Hidden privileged permission allowlists: usually `ROOT_OR_OEM_ONLY` or `ADB_ONLY`.
 - Per-app overlay state: `OBSERVED_ENABLED`, `OBSERVED_DISABLED`, or `UNKNOWN_API_LIMITATION` depending on API/AppOps availability.

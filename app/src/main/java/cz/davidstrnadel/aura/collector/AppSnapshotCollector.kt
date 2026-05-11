@@ -121,7 +121,8 @@ class AppSnapshotCollector(private val context: Context) {
                 "hasBootPersistence" to requested.any { it.endsWith("RECEIVE_BOOT_COMPLETED") }.toString(),
                 "foregroundSensitiveAppRecentlyObserved" to (foregroundSensitiveSignal.packageName != null).toString(),
                 "foregroundSensitiveAppPackage" to foregroundSensitiveSignal.packageName.orEmpty(),
-                "foregroundSensitiveAppAgeMillis" to foregroundSensitiveSignal.ageMillis?.toString().orEmpty()
+                "foregroundSensitiveAppAgeMillis" to foregroundSensitiveSignal.ageMillis?.toString().orEmpty(),
+                "foregroundSensitiveAppSignalSource" to foregroundSensitiveSignal.signalSource
             )
         )
     }
@@ -296,10 +297,12 @@ class AppSnapshotCollector(private val context: Context) {
 
         return runCatching {
             val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val events = usageStats.queryEvents(collectedAt - USAGE_STATS_LOOKBACK_MILLIS, collectedAt)
+            val since = collectedAt - USAGE_STATS_LOOKBACK_MILLIS
+            val events = usageStats.queryEvents(since, collectedAt)
             val event = UsageEvents.Event()
             var latestPackage: String? = null
             var latestTimestamp = 0L
+            var signalSource = ""
 
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
@@ -309,13 +312,38 @@ class AppSnapshotCollector(private val context: Context) {
                 ) {
                     latestPackage = event.packageName
                     latestTimestamp = event.timeStamp
+                    signalSource = "usage_events"
                 }
+            }
+
+            if (latestPackage == null) {
+                usageStats.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY,
+                    since,
+                    collectedAt
+                ).orEmpty()
+                    .filter { it.packageName in sensitivePackages }
+                    .mapNotNull { stats ->
+                        val lastTime = if (Build.VERSION.SDK_INT >= 29) {
+                            maxOf(stats.lastTimeUsed, stats.lastTimeVisible)
+                        } else {
+                            stats.lastTimeUsed
+                        }
+                        if (lastTime in since..collectedAt) stats.packageName to lastTime else null
+                    }
+                    .maxByOrNull { it.second }
+                    ?.let { (packageName, timestamp) ->
+                        latestPackage = packageName
+                        latestTimestamp = timestamp
+                        signalSource = "usage_stats_aggregate"
+                    }
             }
 
             ForegroundSensitiveSignal(
                 observabilityState = ObservabilityState.OBSERVED_ENABLED,
                 packageName = latestPackage,
-                ageMillis = latestPackage?.let { collectedAt - latestTimestamp }
+                ageMillis = latestPackage?.let { collectedAt - latestTimestamp },
+                signalSource = signalSource
             )
         }.getOrElse {
             ForegroundSensitiveSignal(ObservabilityState.UNKNOWN_API_LIMITATION)
@@ -404,6 +432,7 @@ class AppSnapshotCollector(private val context: Context) {
     private data class ForegroundSensitiveSignal(
         val observabilityState: ObservabilityState,
         val packageName: String? = null,
-        val ageMillis: Long? = null
+        val ageMillis: Long? = null,
+        val signalSource: String = ""
     )
 }

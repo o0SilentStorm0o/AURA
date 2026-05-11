@@ -76,7 +76,10 @@ actually present in the exported snapshot, or if the temporal episodes are
 missing from the second-phase export. For the sensitive-foreground episode it
 also asserts `usageStatsObservability = OBSERVED_ENABLED`,
 `foregroundSensitiveAppRecentlyObserved = true`, and
-`foregroundSensitiveAppPackage = com.example.sensitivebank`.
+`foregroundSensitiveAppPackage = com.example.sensitivebank`. AURA records
+`foregroundSensitiveAppSignalSource` as `usage_events` when the event stream is
+available, or `usage_stats_aggregate` when Android exposes only aggregated
+UsageStats for the same lookback window.
 
 The leaky bank fixture must produce defensive surface findings:
 

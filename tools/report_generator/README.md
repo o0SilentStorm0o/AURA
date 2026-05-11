@@ -18,6 +18,29 @@ python3 tools/report_generator/generate_report.py \
   --basename aura-scenario-report
 ```
 
+For customer or external expert sharing, generate reports through a privacy
+mode:
+
+```bash
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --evaluation artifacts/scenario_runner/evaluation.json \
+  --privacy-mode redacted_expert \
+  --salt customer-or-project-salt \
+  --redacted-export-out artifacts/reports/aura-scenario-report.redacted.json \
+  --out-dir artifacts/reports \
+  --basename aura-scenario-report
+```
+
+Supported modes:
+
+- `full_research`: complete local export, suitable only for trusted research.
+- `redacted_expert`: full evidence/report structure with package identifiers,
+  labels, source paths, component names, installers, and signing digests
+  redacted.
+- `minimal_support`: aggregate counts plus priority-only redacted assessment
+  details, without full package inventory.
+
 The report separates:
 
 - threat decision from defensive posture,

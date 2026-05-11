@@ -11,6 +11,10 @@ Suggested first offer:
 - Android App Risk & Defensive Surface Report
 - fixed scope for one APK or one controlled device export
 - PDF/HTML report plus JSON appendix
+- privacy mode selected for the audience:
+  `full_research` for trusted local research, `redacted_expert` for external
+  expert review, or `minimal_support` for support-style sharing without full
+  inventory
 - optional retest after fixes
 
 The report is not a malware guarantee and not a replacement for a full mobile
@@ -30,6 +34,7 @@ explainability layer.
 - methodology and privacy stance
 - threat decision overview
 - baseline comparison
+- report privacy mode and export-sharing warning
 - priority app findings
 - defensive posture highlights
 - temporal episodes

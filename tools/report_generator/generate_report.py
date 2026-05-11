@@ -6,11 +6,15 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
+from redact_export import DEFAULT_SALT, FULL_RESEARCH, PRIVACY_MODES, redact_export
 
 
 DECISION_ORDER = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GRAY": 3, "GREEN": 4}
@@ -28,10 +32,44 @@ def load_json(path: Path | None) -> dict[str, Any] | None:
 
 
 def decision_counts(export: dict[str, Any]) -> Counter[str]:
+    summary_counts = (export.get("summary") or {}).get("decisionCounts")
+    if isinstance(summary_counts, dict):
+        return Counter({str(key): int(value) for key, value in summary_counts.items()})
     return Counter(
         assessment.get("decision", {}).get("color", "UNKNOWN")
         for assessment in export.get("assessments", [])
     )
+
+
+def posture_counts(export: dict[str, Any]) -> Counter[str]:
+    summary_counts = (export.get("summary") or {}).get("defensivePostureCounts")
+    if isinstance(summary_counts, dict):
+        return Counter({str(key): int(value) for key, value in summary_counts.items()})
+    return Counter(
+        posture.get("postureClass", "NO_OBSERVED_WEAKNESS")
+        for posture in export.get("defensivePostures", [])
+    )
+
+
+def assessed_app_count(export: dict[str, Any]) -> int:
+    summary = export.get("summary") or {}
+    if summary.get("assessedAppCount") is not None:
+        return int(summary["assessedAppCount"])
+    return len(export.get("assessments", []))
+
+
+def temporal_episode_count(export: dict[str, Any]) -> int:
+    summary = export.get("summary") or {}
+    if summary.get("temporalEpisodeCount") is not None:
+        return int(summary["temporalEpisodeCount"])
+    return len(export.get("temporalEpisodes", []))
+
+
+def defensive_finding_count(export: dict[str, Any]) -> int:
+    summary = export.get("summary") or {}
+    if summary.get("defensiveFindingCount") is not None:
+        return int(summary["defensiveFindingCount"])
+    return len(export.get("defensiveSurfaceFindings", []))
 
 
 def postures_by_package(export: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -95,6 +133,29 @@ def title_for_app(assessment: dict[str, Any]) -> str:
     snapshot = assessment.get("snapshot", {})
     label = snapshot.get("appLabel") or snapshot.get("packageName", "")
     return f"{label} ({snapshot.get('packageName', '')})"
+
+
+def privacy_lines(export: dict[str, Any]) -> list[str]:
+    privacy = export.get("privacy") or {}
+    mode = privacy.get("mode", "FULL_RESEARCH")
+    lines = [f"- Report privacy mode: `{mode}`"]
+    if mode == "FULL_RESEARCH":
+        lines.append("- Full research exports may contain package inventory, app labels, source paths, and signing digests.")
+        lines.append("")
+        return lines
+
+    lines += [
+        f"- Full inventory included: `{privacy.get('fullInventoryIncluded', False)}`",
+        f"- Package identifiers: `{privacy.get('packageIdentifierStrategy', 'unknown')}`",
+        f"- App labels: `{privacy.get('appLabels', 'unknown')}`",
+        f"- Source paths: `{privacy.get('sourcePaths', 'unknown')}`",
+        f"- Signing digests: `{privacy.get('signingDigests', 'unknown')}`",
+    ]
+    if mode == "MINIMAL_SUPPORT":
+        included = (export.get("summary") or {}).get("includedAssessmentCount", len(export.get("assessments", [])))
+        lines.append(f"- Priority assessments included in this support export: `{included}`")
+    lines.append("")
+    return lines
 
 
 def risk_vector_text(assessment: dict[str, Any]) -> str:
@@ -258,10 +319,7 @@ def render_markdown(
     postures = postures_by_package(export)
     findings = findings_by_package(export)
     assessments = sorted_assessments(export)
-    posture_counts = Counter(
-        posture.get("postureClass", "NO_OBSERVED_WEAKNESS")
-        for posture in export.get("defensivePostures", [])
-    )
+    defensive_posture_counts = posture_counts(export)
     red = counts.get("RED", 0)
     yellow = counts.get("YELLOW", 0)
     blue = counts.get("BLUE", 0)
@@ -276,11 +334,11 @@ def render_markdown(
         "",
         f"- Generated at: `{iso_time(export.get('generatedAt'))}`",
         f"- Flavor: `{export.get('flavor', 'unknown')}`",
-        f"- Applications assessed: `{len(export.get('assessments', []))}`",
+        f"- Applications assessed: `{assessed_app_count(export)}`",
         f"- Threat decisions: RED `{red}`, YELLOW `{yellow}`, BLUE `{blue}`, GRAY `{gray}`, GREEN `{green}`",
-        f"- Defensive posture: weak `{posture_counts.get('WEAK_DEFENSIVE_SURFACE', 0)}`, review `{posture_counts.get('REVIEW_RECOMMENDED', 0)}`, no observed weakness `{posture_counts.get('NO_OBSERVED_WEAKNESS', 0)}`",
-        f"- Temporal episodes: `{len(export.get('temporalEpisodes', []))}`",
-        f"- Defensive findings: `{len(export.get('defensiveSurfaceFindings', []))}`",
+        f"- Defensive posture: weak `{defensive_posture_counts.get('WEAK_DEFENSIVE_SURFACE', 0)}`, review `{defensive_posture_counts.get('REVIEW_RECOMMENDED', 0)}`, no observed weakness `{defensive_posture_counts.get('NO_OBSERVED_WEAKNESS', 0)}`",
+        f"- Temporal episodes: `{temporal_episode_count(export)}`",
+        f"- Defensive findings: `{defensive_finding_count(export)}`",
         "",
         "AURA separates threat decisions from defensive posture. A `GREEN` threat decision means the current scan did not find concrete abuse evidence; it does not mean the app has perfect defensive design.",
         "",
@@ -290,6 +348,11 @@ def render_markdown(
         "",
         "Privacy defaults: no TLS interception, no keylogging, no screen scraping, no notification-content reading, and no external telemetry in the MVP.",
         "",
+        "Report privacy:",
+        "",
+    ]
+    lines += privacy_lines(export)
+    lines += [
         "## Threat Decision Overview",
         "",
         "| Decision | Meaning | Count |",
@@ -545,11 +608,27 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/reports"))
     parser.add_argument("--basename", default="aura-app-risk-report")
     parser.add_argument("--top-apps", type=int, default=12)
+    parser.add_argument("--privacy-mode", choices=PRIVACY_MODES, default=FULL_RESEARCH)
+    parser.add_argument("--salt", default=DEFAULT_SALT, help="Project/customer-specific redaction salt")
+    parser.add_argument(
+        "--redacted-export-out",
+        type=Path,
+        help="Optional path for the privacy-processed JSON used by the report",
+    )
     args = parser.parse_args()
 
     export = load_json(args.export)
     if export is None:
         raise ValueError(f"Could not load export {args.export}")
+    export = redact_export(
+        export,
+        mode=args.privacy_mode,
+        salt=args.salt,
+        salt_provided=args.salt != DEFAULT_SALT,
+    )
+    if args.redacted_export_out:
+        args.redacted_export_out.parent.mkdir(parents=True, exist_ok=True)
+        args.redacted_export_out.write_text(json.dumps(export, indent=2, sort_keys=True) + "\n")
     evaluation = load_json(args.evaluation)
     markdown_path, html_path = write_report(
         export=export,

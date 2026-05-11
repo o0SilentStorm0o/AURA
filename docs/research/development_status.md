@@ -20,7 +20,7 @@ This document separates what exists in the current Research MVP from planned wor
 - Separate defensive-posture summaries so threat decisions stay distinct from
   defensive-surface weakness findings.
 - Offline APK analyzer for detailed defensive-surface heuristics: `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, `accessibilityDataSensitive`, and manifest component metadata, all with confidence and observability state.
-- Opt-in UsageStats foreground correlation for the `SPECIAL_ACCESS_PLUS_SENSITIVE_APP` temporal episode in `researchFull`; this uses only package-level foreground events, not screen, notification, or network content.
+- Opt-in UsageStats foreground correlation for the `SPECIAL_ACCESS_PLUS_SENSITIVE_APP` temporal episode in `researchFull`; this uses only package-level foreground events or aggregated UsageStats fallback, not screen, notification, or network content. The export records the signal source in `foregroundSensitiveAppSignalSource`.
 - Role, permission harm, known package, OEM pattern, F-Droid signature, provenance,
   and decision-policy assets are split under `app/src/main/assets/aura/`; the
   Android app loads rule assets with code fallback for clean MVP builds.
@@ -37,6 +37,9 @@ This document separates what exists in the current Research MVP from planned wor
   explicitly reviewed.
 - Report generator that turns AURA JSON exports and optional evaluator output
   into Markdown plus print-ready HTML Android App Risk reports.
+- Export privacy redactor with `full_research`, `redacted_expert`, and
+  `minimal_support` modes; report generation can now render from a privacy
+  processed export and optionally save that redacted JSON artifact.
 - Research-console UI with decision counts, scan-history summary, selectable app
   detail, risk-vector bars, actionability/provenance/role fields, first-class
   evidence items, evidence graph summary, recommended actions, and per-app
@@ -46,8 +49,6 @@ This document separates what exists in the current Research MVP from planned wor
 
 - Interactive evidence graph visualization beyond the current typed node/edge summary.
 - Full counterfactual remediation UI beyond the current exported trace summary.
-- Export redaction modes for full research, redacted expert, and minimal
-  support exports.
 - Automated PDF rendering beyond browser print/save-as-PDF from generated HTML.
 - Multi-reviewer adjudication workflow beyond generated packets, schema
   validation, and controlled-scenario labels.

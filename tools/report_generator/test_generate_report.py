@@ -10,6 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from generate_report import render_html, render_markdown, write_report
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
+from redact_export import REDACTED_EXPERT, redact_export
+
 
 def export_fixture() -> dict:
     return {
@@ -166,6 +169,14 @@ class GenerateReportTest(unittest.TestCase):
             self.assertTrue(md_path.exists())
             self.assertTrue(html_path.exists())
             self.assertIn("sample", md_path.name)
+
+    def test_markdown_honors_redacted_export_privacy(self) -> None:
+        redacted = redact_export(export_fixture(), mode=REDACTED_EXPERT, salt="report-test", salt_provided=True)
+        markdown = render_markdown(redacted, evaluation_fixture())
+
+        self.assertIn("Report privacy mode: `REDACTED_EXPERT`", markdown)
+        self.assertNotIn("com.flashlight.cleaner.update", markdown)
+        self.assertNotIn("Security Update", markdown)
 
 
 if __name__ == "__main__":
