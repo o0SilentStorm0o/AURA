@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from redact_export import FULL_RESEARCH, MINIMAL_SUPPORT, REDACTED_EXPERT, redact_export
+from redact_export import FULL_RESEARCH, MINIMAL_SUPPORT, REDACTED_EXPERT, REDACTED_TEASER, redact_export
 
 
 SECRET_PACKAGE = "com.flashlight.cleaner.update"
@@ -242,6 +242,31 @@ class RedactExportTest(unittest.TestCase):
         self.assertEqual(minimal["assessments"][0]["decision"]["color"], "RED")
         self.assertIn("packagesChangedSincePreviousScanCount", minimal["scanHistory"])
         self.assert_no_secret_values(minimal)
+
+    def test_redacted_teaser_suppresses_raw_report_detail(self) -> None:
+        teaser = redact_export(export_fixture(), mode=REDACTED_TEASER, salt="teaser-salt", salt_provided=True)
+
+        self.assertEqual(teaser["privacy"]["mode"], "REDACTED_TEASER")
+        self.assertEqual(teaser["privacy"]["componentNames"], "suppressed")
+        self.assertEqual(teaser["privacy"]["rawEvidence"], "suppressed")
+        self.assertEqual(teaser["privacy"]["policyThresholds"], "suppressed")
+        self.assertEqual(teaser["assessments"][0]["snapshot"]["components"], [])
+        self.assertEqual(teaser["assessments"][0]["snapshot"]["signingCertDigestsSha256"], [])
+        self.assertEqual(teaser["assessments"][0]["snapshot"]["requestedPermissions"], [])
+        self.assertEqual(teaser["assessments"][0]["snapshot"]["grantedPermissions"], [])
+        self.assertNotIn("rawValue", serialized(teaser["assessments"][0]["evidence"]))
+        self.assertNotIn("evidenceIds", serialized(teaser["assessments"][0]["decision"]))
+        self.assertNotIn("evidenceIds", serialized(teaser["assessments"][0]["role"]))
+        self.assertNotIn("evidenceIds", serialized(teaser["assessments"][0]["provenance"]))
+        self.assertTrue(teaser["assessments"][0]["riskVector"]["suppressed"])
+        self.assertTrue(teaser["assessments"][0]["evidenceGraph"]["suppressed"])
+        self.assertTrue(teaser["assessments"][0]["decisionTrace"]["suppressed"])
+        self.assertTrue(teaser["defensiveSurfaceFindings"][0]["detailSuppressed"])
+        self.assertEqual(teaser["defensiveSurfaceFindings"][0]["evidence"], [])
+        self.assertTrue(teaser["scanHistory"]["packageListsSuppressed"])
+        self.assertNotIn("packagesChangedSincePreviousScan", teaser["scanHistory"])
+        self.assertNotIn("packagesNewInThisScan", teaser["scanHistory"])
+        self.assert_no_secret_values(teaser)
 
     def test_full_research_marks_mode_without_redaction(self) -> None:
         full = redact_export(export_fixture(), mode=FULL_RESEARCH)

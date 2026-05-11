@@ -52,11 +52,18 @@ The suspicious scenario is intentionally two-phase:
 
 - Suspicious agent: `RED`
 - Low-risk unknown utility: `GRAY`
-- Benign accessibility fixture: `GREEN`
-- Benign camera fixture: `GREEN`
-- Sensitive bank fixture: `GREEN`
-- Leaky bank fixture: `GREEN` as a threat decision, with separate defensive
+- Benign accessibility fixture: `YELLOW`
+- Benign camera fixture: `YELLOW`
+- Sensitive bank fixture: `YELLOW`
+- Leaky bank fixture: `YELLOW` as a threat decision, with separate defensive
   surface findings.
+
+The benign high-capability fixtures are installed through the lab runner, so
+their provenance remains ADB/unknown in this scenario. AURA should normalize
+them out of `RED`, but it should not silently mark them `GREEN` when provenance
+is not explainable. The corresponding real/public Google Play demos can be
+`GREEN` when role fit is plausible, provenance is `PLAY_INSTALLED`, and no
+active risky capability is observed.
 
 The suspicious agent must also be observed with:
 
@@ -120,3 +127,28 @@ baseline comparison explicit. In particular, the scenario output can show
 whether full AURA reduces non-actionable critical alerts compared with
 permission-only scoring while preserving recall on the controlled abuse
 fixture.
+
+## Public Google Play Demo Scans
+
+The controlled fixture runner is separate from the public-demo workflow. Public
+demo scans use apps installed manually from Google Play on a Play-enabled
+emulator, then run AURA normally and create target-scoped teaser reports:
+
+```bash
+python3 tools/public_demo/create_teaser_report.py \
+  artifacts/public-demo/first-wave/aura-last-scan.json \
+  gastromapa \
+  --evaluation artifacts/scenario_runner/evaluation.json
+```
+
+Current active first-wave targets are:
+
+- `gastromapa`
+- `bikeflip`
+- `bistro`
+- `isnemovna`
+
+These reports are `public_teaser` / `redacted_teaser` artifacts. They are not
+vulnerability reports and intentionally suppress exact component names, raw
+evidence, detailed policy trace, full evidence graph, signing values, source
+paths, and exact risk-vector values.

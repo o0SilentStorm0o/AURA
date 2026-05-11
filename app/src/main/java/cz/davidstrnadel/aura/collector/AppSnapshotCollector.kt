@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import cz.davidstrnadel.aura.BuildConfig
 import cz.davidstrnadel.aura.core.ObservedAppSnapshot
@@ -24,19 +25,33 @@ class AppSnapshotCollector(private val context: Context) {
 
     fun collect(scanId: String = UUID.randomUUID().toString()): List<ObservedAppSnapshot> {
         val collectedAt = System.currentTimeMillis()
+        Log.i(TAG, "collector_secure_settings_start scanId=$scanId")
         val enabledAccessibility = secureSetting("enabled_accessibility_services")
         val enabledNotificationListeners = secureSetting("enabled_notification_listeners")
+        Log.i(TAG, "collector_notification_listeners_start scanId=$scanId")
         val enabledNotificationListenerPackages = runCatching {
             NotificationManagerCompat.getEnabledListenerPackages(context)
         }.getOrDefault(emptySet())
+        Log.i(TAG, "collector_installed_packages_start scanId=$scanId")
         val packageInfos = installedPackages()
+        Log.i(TAG, "collector_installed_packages_done scanId=$scanId packages=${packageInfos.size}")
+        Log.i(TAG, "collector_launcher_map_start scanId=$scanId")
+        val launcherActivities = launcherActivityNamesByPackage()
+        Log.i(TAG, "collector_launcher_map_done scanId=$scanId packages=${launcherActivities.size}")
+        Log.i(TAG, "collector_usage_signal_start scanId=$scanId")
         val foregroundSensitiveSignal = foregroundSensitiveSignal(collectedAt, packageInfos)
+        Log.i(
+            TAG,
+            "collector_usage_signal_done scanId=$scanId " +
+                "state=${foregroundSensitiveSignal.observabilityState} package=${foregroundSensitiveSignal.packageName.orEmpty()}"
+        )
 
-        return packageInfos.mapNotNull { packageInfo ->
+        val snapshots = packageInfos.mapNotNull { packageInfo ->
             runCatching {
                 packageInfo.toSnapshot(
                     scanId = scanId,
                     collectedAt = collectedAt,
+                    launcherActivityNames = launcherActivities[packageInfo.packageName].orEmpty(),
                     enabledAccessibility = enabledAccessibility,
                     enabledNotificationListeners = enabledNotificationListeners,
                     enabledNotificationListenerPackages = enabledNotificationListenerPackages,
@@ -44,11 +59,14 @@ class AppSnapshotCollector(private val context: Context) {
                 )
             }.getOrNull()
         }.sortedBy { it.packageName }
+        Log.i(TAG, "collector_snapshots_done scanId=$scanId snapshots=${snapshots.size}")
+        return snapshots
     }
 
     private fun PackageInfo.toSnapshot(
         scanId: String,
         collectedAt: Long,
+        launcherActivityNames: Set<String>,
         enabledAccessibility: String,
         enabledNotificationListeners: String,
         enabledNotificationListenerPackages: Set<String>,
@@ -57,7 +75,7 @@ class AppSnapshotCollector(private val context: Context) {
         val appInfo = applicationInfo
         val requested = requestedPermissions?.toList().orEmpty().sorted()
         val granted = grantedPermissions().sorted()
-        val components = observedComponents(launcherActivityNames(packageName)).sortedWith(compareBy({ it.type }, { it.name }))
+        val components = observedComponents(launcherActivityNames).sortedWith(compareBy({ it.type }, { it.name }))
         val installer = installerPackage(packageName)
         val signing = signingDigests()
         val sourceDir = appInfo?.sourceDir.orEmpty()
@@ -178,16 +196,21 @@ class AppSnapshotCollector(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
-    private fun launcherActivityNames(packageName: String): Set<String> {
+    private fun launcherActivityNamesByPackage(): Map<String, Set<String>> {
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
-            .setPackage(packageName)
         val resolved = if (Build.VERSION.SDK_INT >= 33) {
             packageManager.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0L))
         } else {
             packageManager.queryIntentActivities(intent, 0)
         }
-        return resolved.mapNotNull { it.activityInfo?.name }.toSet()
+        return resolved
+            .mapNotNull { resolveInfo ->
+                val activity = resolveInfo.activityInfo ?: return@mapNotNull null
+                activity.packageName to activity.name
+            }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, names) -> names.toSet() }
     }
 
     private fun unprotectedExportedComponents(components: List<ObservedComponent>): List<ObservedComponent> =
@@ -416,6 +439,7 @@ class AppSnapshotCollector(private val context: Context) {
         }
 
     companion object {
+        private const val TAG = "AURA.Collector"
         private const val FLAG_PRIVILEGED_COMPAT = 1 shl 30
         private const val USAGE_STATS_LOOKBACK_MILLIS = 10 * 60 * 1000L
         private val SENSITIVE_FOREGROUND_MARKERS = setOf(

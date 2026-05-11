@@ -13,7 +13,7 @@ from generate_report import render_html, render_markdown, write_report
 from generate_report import scope_export_to_package
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
-from redact_export import REDACTED_EXPERT, redact_export
+from redact_export import REDACTED_EXPERT, REDACTED_TEASER, redact_export
 
 
 def export_fixture() -> dict:
@@ -369,6 +369,48 @@ class GenerateReportTest(unittest.TestCase):
         self.assertIn("New/regressed on-device finding types: `CLEARTEXT_TRAFFIC_ALLOWED`", markdown)
         self.assertIn("Fixed offline APK finding types: `CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST`", markdown)
         self.assertIn("New/regressed offline APK finding types: `NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED`", markdown)
+
+    def test_public_teaser_suppresses_raw_detail_and_sets_scope(self) -> None:
+        scoped = scope_export_to_package(export_fixture(), "com.flashlight.cleaner.update")
+        redacted = redact_export(scoped, mode=REDACTED_TEASER, salt="teaser-test", salt_provided=True)
+        redacted.setdefault("reportScope", {})
+        redacted["reportScope"] = {
+            **redacted["reportScope"],
+            "reportType": "public_teaser",
+            "clientName": "Example Studio",
+            "publicAppName": "Example Public App",
+            "publicSourceUrl": "https://play.google.com/store/apps/details?id=example",
+        }
+        redacted["privacy"]["fullInventoryIncluded"] = False
+        redacted["privacy"]["reportScope"] = "public_surface_teaser_target_only"
+
+        markdown = render_markdown(
+            redacted,
+            evaluation_fixture(),
+            report_type="public_teaser",
+            max_findings=2,
+        )
+
+        self.assertIn("AURA Public-Surface Demo Report", markdown)
+        self.assertIn("This is not a vulnerability report", markdown)
+        self.assertIn("Public-surface teaser / outreach demo", markdown)
+        self.assertIn("Example Public App", markdown)
+        self.assertIn("Example Studio", markdown)
+        self.assertIn("No account login", markdown)
+        self.assertIn("What the Authorized Full Report Would Add", markdown)
+        self.assertIn("Report privacy mode: `REDACTED_TEASER`", markdown)
+        self.assertIn("priority review area available in full report", markdown)
+        self.assertIn("Component names: `suppressed`", markdown)
+        self.assertIn("Raw evidence detail: `suppressed`", markdown)
+        self.assertIn("Policy thresholds: `suppressed`", markdown)
+        self.assertIn("Full device inventory rows included: `no`", markdown)
+        self.assertIn("platform/component surface review", markdown)
+        self.assertNotIn("UNPROTECTED_EXPORTED_COMPONENT", markdown)
+        self.assertNotIn("WEAK_DEFENSIVE_SURFACE", markdown)
+        self.assertNotIn("component has no permission", markdown)
+        self.assertNotIn("Exported component has no permission.", markdown)
+        self.assertNotIn("Risk vector:", markdown)
+        self.assertNotIn("Decision trace:", markdown)
 
 
 if __name__ == "__main__":

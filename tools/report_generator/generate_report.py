@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
-from redact_export import DEFAULT_SALT, FULL_RESEARCH, PRIVACY_MODES, redact_export
+from redact_export import DEFAULT_SALT, FULL_RESEARCH, REDACTED_TEASER, PRIVACY_MODES, redact_export
 
 
 REPORT_GENERATOR_VERSION = "0.3.0"
-REPORT_TYPES = ("device_expert", "app_owner")
+REPORT_TYPES = ("device_expert", "app_owner", "public_teaser")
 DECISION_ORDER = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GRAY": 3, "GREEN": 4}
 POSTURE_ORDER = {
     "WEAK_DEFENSIVE_SURFACE": 0,
@@ -233,6 +233,16 @@ def mark_target_only_privacy(export: dict[str, Any]) -> dict[str, Any]:
     return export
 
 
+def mark_public_teaser_privacy(export: dict[str, Any]) -> dict[str, Any]:
+    export = mark_target_only_privacy(export)
+    privacy = export.setdefault("privacy", {})
+    privacy["componentNames"] = "suppressed"
+    privacy["rawEvidence"] = "suppressed"
+    privacy["policyThresholds"] = "suppressed"
+    privacy["reportScope"] = "public_surface_teaser_target_only"
+    return export
+
+
 def offline_apk_for_package(offline_analysis: dict[str, Any] | None, target_package: str) -> dict[str, Any] | None:
     if not offline_analysis:
         return None
@@ -292,27 +302,37 @@ def privacy_lines(export: dict[str, Any]) -> list[str]:
     privacy = export.get("privacy") or {}
     report_scope = export.get("reportScope") or {}
     app_owner_scope = report_scope.get("reportType") == "app_owner"
+    teaser_scope = report_scope.get("reportType") == "public_teaser"
+    target_only = app_owner_scope or teaser_scope
     mode = privacy.get("mode", "FULL_RESEARCH")
     lines = [f"- Report privacy mode: `{mode}`"]
-    if app_owner_scope:
+    if target_only:
         lines.append("- Report scope: `target_app_only`")
+    if teaser_scope:
+        lines.append("- Public teaser detail level: `high_level_only`")
     if mode == "FULL_RESEARCH":
         lines.append("- Full research exports may contain package inventory, app labels, source paths, and signing digests.")
-        lines.append(f"- Full device inventory rows included: `{'no' if app_owner_scope else 'yes'}`")
+        lines.append(f"- Full device inventory rows included: `{'no' if target_only else 'yes'}`")
         lines.append("- Direct package names included: `yes`")
         lines.append("")
         return lines
 
     lines += [
-        f"- Full device inventory rows included: `{'no' if app_owner_scope else bool_text(privacy.get('fullInventoryIncluded', False))}`",
+        f"- Full device inventory rows included: `{'no' if target_only else bool_text(privacy.get('fullInventoryIncluded', False))}`",
         "- Direct package names included: `no`",
         "- Package aliases are per-report pseudonyms; the alias mapping is not included in this redacted report.",
         f"- Package identifiers: `{privacy.get('packageIdentifierStrategy', 'unknown')}`",
         f"- App labels: `{privacy.get('appLabels', 'unknown')}`",
         f"- Source paths: `{privacy.get('sourcePaths', 'unknown')}`",
         f"- Signing digests: `{privacy.get('signingDigests', 'unknown')}`",
+        f"- Component names: `{privacy.get('componentNames', 'unknown')}`",
+        f"- Raw evidence detail: `{privacy.get('rawEvidence', 'unknown')}`",
+        f"- Policy thresholds: `{privacy.get('policyThresholds', 'unknown')}`",
         f"- Redaction salt status: `{privacy.get('salt', 'unknown')}`",
     ]
+    if mode == "REDACTED_TEASER":
+        lines.append("- Public target source URL may identify the single target app; raw inventory package names remain suppressed.")
+        lines.append("- Teaser reports suppress detailed component names, raw manifest values, full evidence graph, and exact internal policy trace.")
     if mode == "MINIMAL_SUPPORT":
         included = (export.get("summary") or {}).get("includedAssessmentCount", len(export.get("assessments", [])))
         lines.append(f"- Priority assessments included in this support export: `{included}`")
@@ -1157,6 +1177,250 @@ def render_app_owner_markdown(
     return "\n".join(lines)
 
 
+def teaser_public_name(export: dict[str, Any], assessment: dict[str, Any]) -> str:
+    scope = export.get("reportScope") or {}
+    return str(scope.get("publicAppName") or assessment.get("snapshot", {}).get("appLabel") or "target app")
+
+
+def teaser_source_url(export: dict[str, Any]) -> str:
+    return str((export.get("reportScope") or {}).get("publicSourceUrl") or "not supplied")
+
+
+def teaser_scope_section(export: dict[str, Any], assessment: dict[str, Any]) -> list[str]:
+    scope = export.get("reportScope") or {}
+    snapshot = assessment.get("snapshot", {})
+    return [
+        "## Authorization and Scope",
+        "",
+        "This is not a vulnerability report. It is a non-invasive public-surface demo of the reporting structure AURA can produce.",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        "| Report type | Public-surface teaser / outreach demo |",
+        f"| Intended recipient | `{scope.get('clientName', 'unspecified')}` |",
+        f"| Public target app | `{md_escape(teaser_public_name(export, assessment))}` |",
+        f"| Target alias in this report | `{snapshot.get('packageName', 'unknown')}` |",
+        f"| Public source | `{md_escape(teaser_source_url(export))}` |",
+        f"| Scan ID | `{export.get('scanId', 'unknown')}` |",
+        f"| Build/flavor | `{export.get('flavor', snapshot.get('flavor', 'unknown'))}` |",
+        f"| Android version / API | `{snapshot.get('androidVersion', 'unknown')}` / `{snapshot.get('apiLevel', 'unknown')}` |",
+        f"| Device model | `{snapshot.get('deviceModel', 'unknown')}` |",
+        "",
+        "Scope boundaries:",
+        "",
+        "- Publicly available Android app build only.",
+        "- No account login, payment flow, or sensitive in-app workflow was exercised.",
+        "- No root, Frida, exploit attempt, MITM, TLS interception, or protection bypass.",
+        "- No screen contents, notification contents, keystrokes, or network payloads were read.",
+        "- Detailed findings and remediation require authorization and preferably a test build supplied by the owner.",
+        "",
+    ]
+
+
+def teaser_summary_section(
+    export: dict[str, Any],
+    assessment: dict[str, Any],
+    posture: dict[str, Any],
+    findings: list[dict[str, Any]],
+    episodes: list[dict[str, Any]],
+) -> list[str]:
+    decision = assessment.get("decision", {})
+    role = assessment.get("role", {})
+    provenance = assessment.get("provenance", {})
+    story = assessment.get("userRiskStory", {})
+    finding_text = "none exported in teaser scope"
+    if findings:
+        categories = sorted({teaser_finding_category(finding) for finding in findings})
+        finding_text = f"{len(categories)} high-level review area(s): {', '.join(categories[:3])}"
+    return [
+        "## Teaser Conclusion",
+        "",
+        f"AURA evaluated the public target app `{md_escape(teaser_public_name(export, assessment))}` using a no-root, metadata-only scope. The teaser is designed to show report semantics, not to make a final security verdict about the app.",
+        "",
+        "| Axis | Teaser result |",
+        "| --- | --- |",
+        f"| Threat decision | `{decision.get('color', 'unknown')}` / {md_escape(decision.get('title', ''))} |",
+        f"| Defensive posture | {teaser_posture_label(posture)} |",
+        f"| Role inference | `{role.get('predicted', 'unknown')}` / confidence `{score(role.get('confidence'))}` |",
+        f"| Provenance class | `{provenance.get('provenanceClass', 'unknown')}` |",
+        f"| Provenance trust level | `{level(provenance_trust(assessment))}` |",
+        f"| Temporal episodes in teaser scope | `{len(episodes)}` |",
+        f"| Defensive categories shown | `{finding_text}` |",
+        "",
+        f"High-level risk story: {md_escape(story.get('primaryReason', decision.get('explanation', 'No detailed story exported in teaser mode.')))}",
+        "",
+    ]
+
+
+def teaser_posture_label(posture: dict[str, Any]) -> str:
+    posture_class = str(posture.get("postureClass", "NO_OBSERVED_WEAKNESS"))
+    if posture_class == "NO_OBSERVED_WEAKNESS":
+        return "`no high-level review area shown in teaser`"
+    if posture_class == "REVIEW_RECOMMENDED":
+        return "`review area available in full report`"
+    if posture_class == "WEAK_DEFENSIVE_SURFACE":
+        return "`priority review area available in full report`"
+    return "`manual review area available in full report`"
+
+
+def teaser_finding_category(finding: dict[str, Any]) -> str:
+    finding_type = str(finding.get("findingType", ""))
+    if "EXPORTED_COMPONENT" in finding_type:
+        return "platform/component surface review"
+    if "CLEARTEXT" in finding_type or "NETWORK_SECURITY_CONFIG" in finding_type:
+        return "network transport configuration review"
+    if "BACKUP" in finding_type:
+        return "backup/data extraction configuration review"
+    if "DEBUGGABLE" in finding_type:
+        return "release build hardening review"
+    if "FLAG_SECURE" in finding_type or "FILTER_TOUCHES" in finding_type or "ACCESSIBILITY_DATA" in finding_type:
+        return "sensitive UI hardening review"
+    return "manual mobile security review"
+
+
+def teaser_capability_section(
+    assessment: dict[str, Any],
+    findings: list[dict[str, Any]],
+    max_findings: int,
+) -> list[str]:
+    snapshot = assessment.get("snapshot", {})
+    requested = snapshot.get("requestedPermissions", [])
+    granted = snapshot.get("grantedPermissions", [])
+    special = snapshot.get("specialAccess") or {}
+    active_special = [name for name, state in special.items() if state == "OBSERVED_ENABLED"]
+    declared_special = [name for name, state in special.items() if state == "DECLARED_ONLY"]
+    raw = snapshot.get("rawFeatures") or {}
+    requested_count = len(requested) or raw.get("requestedPermissionCount", "unknown")
+    granted_count = len(granted) or raw.get("grantedPermissionCount", "unknown")
+    lines = [
+        "## High-Level Observed Categories",
+        "",
+        "| Category | Teaser-safe summary |",
+        "| --- | --- |",
+        f"| Permissions/capabilities | `{requested_count}` requested, `{granted_count}` granted in observed metadata |",
+        f"| Active special access | `{', '.join(sorted(active_special)) if active_special else 'none observed'}` |",
+        f"| Declared-only special access | `{', '.join(sorted(declared_special)) if declared_special else 'none exported in teaser'}` |",
+        f"| Component surface | counts only; exact component names are suppressed |",
+        f"| Backup/debuggable/cleartext indicators | backup `{raw.get('allowBackup', 'unknown')}`, debuggable `{raw.get('debuggable', 'unknown')}`, cleartext `{raw.get('usesCleartextTraffic', 'unknown')}` |",
+        "",
+    ]
+    if findings:
+        lines += [
+            "Defensive posture review areas shown without raw component names or exact findings:",
+            "",
+        ]
+        categories = []
+        for finding in sorted(findings, key=lambda item: teaser_finding_category(item)):
+            category = teaser_finding_category(finding)
+            if category not in categories:
+                categories.append(category)
+        for category in categories[:max_findings]:
+            lines.append(
+                f"- {category}: detailed evidence and remediation are reserved for the authorized full report."
+            )
+        lines.append("")
+    else:
+        lines += ["No defensive posture categories were exported in the teaser scope.", ""]
+    return lines
+
+
+def teaser_baseline_section(evaluation: dict[str, Any] | None) -> list[str]:
+    if not evaluation:
+        return [
+            "## Baseline Teaser",
+            "",
+            "No evaluator output was supplied for this teaser. Full authorized reports can include a replayable baseline comparison.",
+            "",
+        ]
+    model_metrics = evaluation.get("modelMetrics", {})
+    permission = model_metrics.get("permission_only", {})
+    full = model_metrics.get("full_aura", {})
+    labelled = int(evaluation.get("labelledApps") or (evaluation.get("metrics") or {}).get("metric_population") or 0)
+    lines = [
+        "## Baseline Teaser",
+        "",
+        f"- Baseline scope: labelled scenario subset only (`{labelled}` labelled app(s)); this is a demo of AURA semantics, not a claim about the target app owner without authorization.",
+        f"- Permission-only non-actionable critical alert rate: `{score(permission.get('non_actionable_critical_alert_rate'))}`",
+        f"- Full AURA non-actionable critical alert rate: `{score(full.get('non_actionable_critical_alert_rate'))}`",
+        f"- Permission-only user-actionable precision: `{score(permission.get('user_actionable_precision'))}`",
+        f"- Full AURA user-actionable precision: `{score(full.get('user_actionable_precision'))}`",
+        "",
+        "The point of the teaser is the reporting distinction: AURA avoids treating capability exposure alone as a final threat verdict.",
+        "",
+    ]
+    return lines
+
+
+def teaser_full_report_section() -> list[str]:
+    return [
+        "## What the Authorized Full Report Would Add",
+        "",
+        "With explicit authorization and preferably a supplied test build, a full AURA report can add:",
+        "",
+        "- Component-level evidence with exact manifest entries and exported component review.",
+        "- Offline APK analyzer evidence for `network_security_config`, defensive UI patterns, and static code/layout heuristics.",
+        "- Full evidence graph, decision trace, counterfactual remediation, and retest comparison.",
+        "- Concrete remediation checklist with finding IDs, owner-friendly status tracking, and before/after diffs.",
+        "- JSON appendix suitable for reproducibility, expert review, and policy replay.",
+        "",
+        "The teaser intentionally withholds raw evidence, exact component names, signing details, source paths, internal thresholds, and exploitability detail.",
+        "",
+    ]
+
+
+def render_public_teaser_markdown(
+    export: dict[str, Any],
+    evaluation: dict[str, Any] | None = None,
+    *,
+    max_findings: int = 3,
+) -> str:
+    assessment = export.get("assessments", [{}])[0]
+    package = package_name(assessment)
+    posture = postures_by_package(export).get(package, {})
+    findings = findings_by_package(export).get(package, [])
+    package_episodes = episodes_by_package(export).get(package, [])
+    lines = [
+        "# AURA Public-Surface Demo Report",
+        "",
+        "> This is not a vulnerability report. It is a non-invasive teaser showing how AURA structures Android app risk, defensive posture, actionability, and observability limits.",
+        "",
+    ]
+    lines += teaser_summary_section(export, assessment, posture, findings, package_episodes)
+    lines += teaser_scope_section(export, assessment)
+    lines += [
+        "## Why AURA Is Different",
+        "",
+        "AURA does not equate \"more permissions\" with a final threat verdict. It asks whether observed capabilities fit the app role, whether provenance is explainable, whether there is concrete abuse evidence, whether the result is user-actionable, and what the no-root scan could not observe.",
+        "",
+        "Threat decision and defensive posture are separate axes. A public app can have no user-actionable threat finding in this teaser while still having app-hardening categories that would deserve review in an authorized report.",
+        "",
+    ]
+    lines += teaser_capability_section(assessment, findings, max_findings=max_findings)
+    lines += teaser_baseline_section(evaluation)
+    lines += [
+        "## Observability Limits",
+        "",
+        "- Teaser mode uses no-root metadata and suppresses raw evidence details.",
+        "- Missing evidence is treated as uncertainty, not as proof of compromise.",
+        "- Temporal correlation, when present, is not proof of attack.",
+        "- AURA cannot assess kernel, baseband, TEE, bootloader, server-side account abuse, or hidden OEM framework compromise from this public-surface scan.",
+        "",
+        "Report privacy:",
+        "",
+    ]
+    lines += privacy_lines(export)
+    lines += teaser_full_report_section()
+    lines += [
+        "## Manual Review Gate",
+        "",
+        "Before sending this teaser externally, manually review the wording and remove anything that could be read as an accusation or unauthorized vulnerability disclosure.",
+        "",
+        "Suggested outreach line: `This is not a finding against your application; it is a sample of the report structure AURA can generate with proper authorization.`",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def app_detail_section(
     assessment: dict[str, Any],
     posture: dict[str, Any] | None,
@@ -1260,7 +1524,10 @@ def render_markdown(
     previous_export: dict[str, Any] | None = None,
     offline_analysis: dict[str, Any] | None = None,
     previous_offline_analysis: dict[str, Any] | None = None,
+    max_findings: int = 3,
 ) -> str:
+    if report_type == "public_teaser":
+        return render_public_teaser_markdown(export, evaluation, max_findings=max_findings)
     if report_type == "app_owner":
         return render_app_owner_markdown(
             export,
@@ -1597,6 +1864,7 @@ def write_report(
     previous_export: dict[str, Any] | None = None,
     offline_analysis: dict[str, Any] | None = None,
     previous_offline_analysis: dict[str, Any] | None = None,
+    max_findings: int = 3,
 ) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     markdown = render_markdown(
@@ -1607,6 +1875,7 @@ def write_report(
         previous_export=previous_export,
         offline_analysis=offline_analysis,
         previous_offline_analysis=previous_offline_analysis,
+        max_findings=max_findings,
     )
     markdown_path = out_dir / f"{basename}.md"
     html_path = out_dir / f"{basename}.html"
@@ -1622,8 +1891,12 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/reports"))
     parser.add_argument("--basename", default="aura-app-risk-report")
     parser.add_argument("--top-apps", type=int, default=12)
+    parser.add_argument("--max-findings", type=int, default=3, help="Maximum high-level finding categories in public teaser reports")
     parser.add_argument("--report-type", choices=REPORT_TYPES, default="device_expert")
-    parser.add_argument("--target-package", help="Required for --report-type app_owner; package to scope the report to")
+    parser.add_argument("--target-package", help="Required for target-scoped report types; package to scope the report to")
+    parser.add_argument("--client-name", help="Optional recipient/client name for public teaser reports")
+    parser.add_argument("--public-app-name", help="Optional public app display name for public teaser reports")
+    parser.add_argument("--public-source-url", help="Optional public Play Store or case-study URL for public teaser reports")
     parser.add_argument("--previous-export", type=Path, help="Optional previous AURA export for app-owner retest comparison")
     parser.add_argument("--offline-analysis", type=Path, help="Optional tools/apk_analyzer JSON output for the target APK")
     parser.add_argument("--previous-offline-analysis", type=Path, help="Optional previous offline APK analyzer JSON for retest comparison")
@@ -1635,6 +1908,9 @@ def main() -> int:
         help="Optional path for the privacy-processed JSON used by the report",
     )
     args = parser.parse_args()
+    privacy_mode = args.privacy_mode
+    if args.report_type == "public_teaser":
+        privacy_mode = REDACTED_TEASER
 
     export = load_json(args.export)
     if export is None:
@@ -1642,10 +1918,18 @@ def main() -> int:
     previous_export = load_json(args.previous_export)
     offline_analysis = load_json(args.offline_analysis)
     previous_offline_analysis = load_json(args.previous_offline_analysis)
-    if args.report_type == "app_owner":
+    if args.report_type in {"app_owner", "public_teaser"}:
         if not args.target_package:
-            raise ValueError("--target-package is required when --report-type app_owner")
+            raise ValueError(f"--target-package is required when --report-type {args.report_type}")
         export = scope_export_to_package(export, args.target_package)
+        export.setdefault("reportScope", {})
+        export["reportScope"] = {
+            **export["reportScope"],
+            "reportType": args.report_type,
+            "clientName": args.client_name,
+            "publicAppName": args.public_app_name,
+            "publicSourceUrl": args.public_source_url,
+        }
         if previous_export is not None:
             previous_export = scope_export_to_package(previous_export, args.target_package)
         if offline_analysis is not None:
@@ -1658,21 +1942,33 @@ def main() -> int:
                 raise ValueError(f"No previous offline APK analysis entry matched target package {args.target_package!r}")
     export = redact_export(
         export,
-        mode=args.privacy_mode,
+        mode=privacy_mode,
         salt=args.salt,
         salt_provided=args.salt != DEFAULT_SALT,
     )
     if args.report_type == "app_owner":
         export = mark_target_only_privacy(export)
+    if args.report_type == "public_teaser":
+        export = mark_public_teaser_privacy(export)
+        export.setdefault("reportScope", {})
+        export["reportScope"] = {
+            **export["reportScope"],
+            "reportType": "public_teaser",
+            "clientName": args.client_name,
+            "publicAppName": args.public_app_name,
+            "publicSourceUrl": args.public_source_url,
+        }
     if previous_export is not None:
         previous_export = redact_export(
             previous_export,
-            mode=args.privacy_mode,
+            mode=privacy_mode,
             salt=args.salt,
             salt_provided=args.salt != DEFAULT_SALT,
         )
         if args.report_type == "app_owner":
             previous_export = mark_target_only_privacy(previous_export)
+        if args.report_type == "public_teaser":
+            previous_export = mark_public_teaser_privacy(previous_export)
     if args.redacted_export_out:
         args.redacted_export_out.parent.mkdir(parents=True, exist_ok=True)
         args.redacted_export_out.write_text(json.dumps(export, indent=2, sort_keys=True) + "\n")
@@ -1687,6 +1983,7 @@ def main() -> int:
         previous_export=previous_export,
         offline_analysis=offline_analysis,
         previous_offline_analysis=previous_offline_analysis,
+        max_findings=args.max_findings,
     )
     print(f"Wrote Markdown report to {markdown_path}")
     print(f"Wrote HTML report to {html_path}")

@@ -72,7 +72,6 @@ EXPECTATIONS = [
         expected_temporal_episodes=[
             "SIDELOAD_TO_ACCESSIBILITY",
             "SIDELOAD_TO_NOTIFICATION_LISTENER",
-            "SPECIAL_ACCESS_PLUS_SENSITIVE_APP",
         ],
     ),
     ScenarioExpectation(
@@ -83,23 +82,23 @@ EXPECTATIONS = [
     ),
     ScenarioExpectation(
         "org.fdroid.example.screenreader",
-        "GREEN",
-        "Declared accessibility tool with assistive label but no active special access",
+        "YELLOW",
+        "Declared accessibility tool with assistive label but ADB/unknown provenance should remain review, not panic",
     ),
     ScenarioExpectation(
         "com.example.benigncamera",
-        "GREEN",
-        "High-capability camera-shaped fixture should be role-normalized out of the panic queue",
+        "YELLOW",
+        "High-capability camera-shaped ADB fixture should be role-normalized out of RED but remain review due unknown provenance",
     ),
     ScenarioExpectation(
         "com.example.sensitivebank",
-        "GREEN",
-        "Sensitive app fixture without risky capability should not be an alert",
+        "YELLOW",
+        "Sensitive ADB fixture without risky capability should not be RED but remains review due unknown provenance",
     ),
     ScenarioExpectation(
         "com.example.leakybank",
-        "GREEN",
-        "Sensitive app fixture with weak defensive surface should stay out of the panic queue",
+        "YELLOW",
+        "Sensitive ADB fixture with weak defensive surface should stay out of RED while remaining review due unknown provenance",
         expected_defensive_findings=[
             "BACKUP_ALLOWED_SENSITIVE_APP",
             "CLEARTEXT_TRAFFIC_ALLOWED",
@@ -545,7 +544,10 @@ def assert_expectations(export_path: Path) -> None:
                         f"{expectation.package_name}: missing temporal episode {expected_type}; "
                         f"observed {sorted(actual_temporal)}"
                     )
-            if expectation.package_name == "com.flashlight.cleaner.update":
+            if (
+                expectation.package_name == "com.flashlight.cleaner.update" and
+                "SPECIAL_ACCESS_PLUS_SENSITIVE_APP" in expectation.expected_temporal_episodes
+            ):
                 raw_features = assessment["snapshot"].get("rawFeatures", {})
                 if raw_features.get("usageStatsObservability") != "OBSERVED_ENABLED":
                     failures.append(

@@ -136,6 +136,31 @@ class AuraRuleAssets(
                 role = RoleCategory.PAYMENT_BANKING.name,
                 confidence = 0.72,
                 packageOrLabelMarkers = listOf("bank", "pay", "wallet")
+            ),
+            RoleRuleAsset(
+                role = RoleCategory.ECOMMERCE_MARKETPLACE.name,
+                confidence = 0.76,
+                packageOrLabelMarkers = listOf(
+                    "shop",
+                    "store",
+                    "market",
+                    "marketplace",
+                    "commerce",
+                    "bistro",
+                    "restaurant",
+                    "delivery",
+                    "food",
+                    "bikeflip",
+                    "rohlik",
+                    "kosik",
+                    "qerko",
+                    "oriflame"
+                )
+            ),
+            RoleRuleAsset(
+                role = RoleCategory.PUBLIC_INFORMATION.name,
+                confidence = 0.72,
+                packageOrLabelMarkers = listOf("snemovna", "parliament", "public", "civic", "guide", "info", "news")
             )
         )
 

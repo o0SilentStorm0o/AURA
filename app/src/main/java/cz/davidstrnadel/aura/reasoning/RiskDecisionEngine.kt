@@ -518,7 +518,7 @@ class RiskDecisionEngine(
                     "Abuse evidence: ${vector.abuseEvidence.scoreText()}"
                 ),
                 whatWasNotObserved = commonNotObserved,
-                whyItMatters = "Powerful permissions can be normal for apps such as cameras, maps, keyboards, or system components.",
+                whyItMatters = "Powerful permissions can be normal for apps such as cameras, maps, marketplace/delivery apps, keyboards, or system components.",
                 recommendedNextStep = "No immediate user action is recommended from this scan evidence.",
                 confidenceText = "AURA found no concrete abuse evidence for the current decision.",
                 limitationsText = "GREEN threat status does not mean the app has perfect defensive posture."
@@ -567,6 +567,8 @@ class RiskDecisionEngine(
             RoleCategory.BROWSER -> snapshot.packageName.contains("browser", true) || snapshot.packageName.contains("chrome", true)
             RoleCategory.DIALER -> dangerous.any { it.endsWith("CALL_PHONE") || it.endsWith("READ_PHONE_STATE") }
             RoleCategory.PAYMENT_BANKING -> true
+            RoleCategory.ECOMMERCE_MARKETPLACE -> !hasActiveRiskyCapability(snapshot) && !hasUnexpectedHighRiskPermission(dangerous)
+            RoleCategory.PUBLIC_INFORMATION -> !hasActiveRiskyCapability(snapshot) && !hasUnexpectedHighRiskPermission(dangerous)
             RoleCategory.SYSTEM_COMPONENT, RoleCategory.OEM_TELEMETRY_SERVICE -> snapshot.isSystemApp
             else -> false
         }
@@ -632,6 +634,18 @@ class RiskDecisionEngine(
     private fun hasActiveRiskyCapability(snapshot: ObservedAppSnapshot): Boolean =
         snapshot.specialAccess.any { (name, state) ->
             name in activeRiskySpecialAccess && state == ObservabilityState.OBSERVED_ENABLED
+        }
+
+    private fun hasUnexpectedHighRiskPermission(permissions: Set<String>): Boolean =
+        permissions.any {
+            it.endsWith("READ_SMS") ||
+                it.endsWith("SEND_SMS") ||
+                it.endsWith("RECEIVE_SMS") ||
+                it.endsWith("READ_CALL_LOG") ||
+                it.endsWith("REQUEST_INSTALL_PACKAGES") ||
+                it.endsWith("SYSTEM_ALERT_WINDOW") ||
+                it.endsWith("BIND_ACCESSIBILITY_SERVICE") ||
+                it.endsWith("BIND_NOTIFICATION_LISTENER_SERVICE")
         }
 
     private fun actionability(snapshot: ObservedAppSnapshot): ActionabilityClass = when {

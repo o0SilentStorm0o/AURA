@@ -1,6 +1,7 @@
 package cz.davidstrnadel.aura.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cz.davidstrnadel.aura.collector.AppSnapshotCollector
@@ -66,26 +67,41 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
     fun rescan() {
         viewModelScope.launch(Dispatchers.Default) {
             val scanId = UUID.randomUUID().toString()
+            Log.i(TAG, "scan_start scanId=$scanId")
             _state.value = AuraUiState(loading = true, scanId = scanId)
             runCatching {
                 val previousSnapshots = snapshotHistoryStore.loadByPackage()
+                Log.i(TAG, "history_loaded scanId=$scanId packages=${previousSnapshots.size}")
                 val snapshots = collector.collect(scanId)
+                Log.i(TAG, "snapshots_collected scanId=$scanId packages=${snapshots.size}")
                 val temporalEpisodes = snapshots.flatMap { current ->
                     temporalEpisodeDetector.detect(previousSnapshots[current.packageName], current)
                 }
+                Log.i(TAG, "temporal_detected scanId=$scanId episodes=${temporalEpisodes.size}")
                 val assessments = snapshots
                     .map { assessmentEngine.assess(it) }
                     .sortedWith(compareBy<AuraAssessment> { decisionRank(it) }.thenBy { it.snapshot.packageName })
+                Log.i(TAG, "assessments_built scanId=$scanId assessments=${assessments.size}")
                 val defensiveSurfaceFindings = defensiveSurfaceAuditor.audit(assessments)
                 val defensivePostures = defensivePostureAssessor.summarize(
                     assessments = assessments,
                     findings = defensiveSurfaceFindings
+                )
+                Log.i(
+                    TAG,
+                    "defensive_assessed scanId=$scanId findings=${defensiveSurfaceFindings.size} " +
+                        "postures=${defensivePostures.size}"
                 )
                 val flavor = assessments.firstOrNull()?.snapshot?.flavor.orEmpty()
                 val scanHistory = snapshotHistoryStore.appendScan(
                     assessments = assessments,
                     temporalEpisodes = temporalEpisodes,
                     defensiveSurfaceFindings = defensiveSurfaceFindings
+                )
+                Log.i(
+                    TAG,
+                    "history_written scanId=$scanId retainedScans=${scanHistory.retainedScanCount} " +
+                        "retainedPackages=${scanHistory.retainedPackageCount}"
                 )
                 val export = AuraScanExport(
                     schemaVersion = 1,
@@ -105,6 +121,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     .also { it.mkdirs() }
                     .resolve("aura-last-scan.json")
                 writeAtomically(exportFile, json)
+                Log.i(TAG, "export_written scanId=$scanId path=${exportFile.absolutePath} bytes=${exportFile.length()}")
                 _state.value = AuraUiState(
                     loading = false,
                     scanId = scanId,
@@ -117,6 +134,7 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
                     exportPath = exportFile.absolutePath
                 )
             }.onFailure { error ->
+                Log.e(TAG, "scan_failed scanId=$scanId", error)
                 _state.value = AuraUiState(
                     loading = false,
                     scanId = scanId,
@@ -141,5 +159,9 @@ class AuraViewModel(application: Application) : AndroidViewModel(application) {
             file.writeText(content)
             tempFile.delete()
         }
+    }
+
+    private companion object {
+        private const val TAG = "AURA.Scan"
     }
 }

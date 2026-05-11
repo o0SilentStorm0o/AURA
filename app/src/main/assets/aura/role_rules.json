@@ -34,6 +34,31 @@
       "role": "PAYMENT_BANKING",
       "confidence": 0.72,
       "packageOrLabelMarkers": ["bank", "pay", "wallet"]
+    },
+    {
+      "role": "ECOMMERCE_MARKETPLACE",
+      "confidence": 0.76,
+      "packageOrLabelMarkers": [
+        "shop",
+        "store",
+        "market",
+        "marketplace",
+        "commerce",
+        "bistro",
+        "restaurant",
+        "delivery",
+        "food",
+        "bikeflip",
+        "rohlik",
+        "kosik",
+        "qerko",
+        "oriflame"
+      ]
+    },
+    {
+      "role": "PUBLIC_INFORMATION",
+      "confidence": 0.72,
+      "packageOrLabelMarkers": ["snemovna", "parliament", "public", "civic", "guide", "info", "news"]
     }
   ]
 }

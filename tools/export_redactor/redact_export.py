@@ -16,8 +16,9 @@ from typing import Any
 
 FULL_RESEARCH = "full_research"
 REDACTED_EXPERT = "redacted_expert"
+REDACTED_TEASER = "redacted_teaser"
 MINIMAL_SUPPORT = "minimal_support"
-PRIVACY_MODES = (FULL_RESEARCH, REDACTED_EXPERT, MINIMAL_SUPPORT)
+PRIVACY_MODES = (FULL_RESEARCH, REDACTED_EXPERT, REDACTED_TEASER, MINIMAL_SUPPORT)
 DEFAULT_SALT = "aura-public-redaction-v1"
 GENERIC_LABELS = {
     "android",
@@ -243,6 +244,7 @@ class RedactionContext:
 
 
 def privacy_metadata(mode: str, *, full_inventory: bool, salt_provided: bool) -> dict[str, Any]:
+    teaser = mode == REDACTED_TEASER
     return {
         "schemaVersion": 1,
         "mode": mode.upper(),
@@ -252,8 +254,16 @@ def privacy_metadata(mode: str, *, full_inventory: bool, salt_provided: bool) ->
         "appLabels": "redacted" if mode != FULL_RESEARCH else "raw",
         "sourcePaths": "redacted_to_partition" if mode != FULL_RESEARCH else "raw",
         "signingDigests": "short_hmac_hash" if mode != FULL_RESEARCH else "raw",
+        "componentNames": "suppressed" if teaser else ("redacted_aliases" if mode != FULL_RESEARCH else "raw"),
+        "rawEvidence": "suppressed" if teaser else ("redacted" if mode != FULL_RESEARCH else "raw"),
+        "policyThresholds": "suppressed" if teaser else "included_where_exported",
         "salt": "provided" if salt_provided else "default_reproducible",
-        "notice": "Exports can reveal installed apps and device context; share only with trusted reviewers.",
+        "notice": (
+            "Teaser exports are for public-surface outreach only; they suppress raw technical detail "
+            "and are not vulnerability reports."
+            if teaser
+            else "Exports can reveal installed apps and device context; share only with trusted reviewers."
+        ),
     }
 
 
@@ -454,6 +464,101 @@ def redacted_expert_export(
     return redacted
 
 
+def redacted_teaser_export(
+    export: dict[str, Any],
+    context: RedactionContext,
+    *,
+    salt_provided: bool,
+) -> dict[str, Any]:
+    """Produce a teaser-safe export with redacted identifiers and suppressed detail.
+
+    The report generator normally scopes this export to one package before redaction.
+    This mode still works for direct CLI use, but callers should avoid sharing it as a
+    broad device report because teaser outreach is intentionally target-focused.
+    """
+
+    redacted = redacted_expert_export(export, context, salt_provided=salt_provided)
+    redacted["privacy"] = privacy_metadata(REDACTED_TEASER, full_inventory=True, salt_provided=salt_provided)
+    for assessment in redacted.get("assessments", []):
+        snapshot = assessment.get("snapshot") or {}
+        snapshot["components"] = []
+        snapshot["signingCertDigestsSha256"] = []
+        snapshot["requestedPermissions"] = []
+        snapshot["grantedPermissions"] = []
+        raw_features = snapshot.get("rawFeatures") or {}
+        for key in (
+            "sourceDir",
+            "foregroundSensitiveAppPackage",
+            "installerPackageName",
+            "componentNames",
+            "launcherActivityNames",
+        ):
+            raw_features.pop(key, None)
+        assessment["evidence"] = [
+            {
+                "source": evidence.get("source"),
+                "observabilityState": evidence.get("observabilityState"),
+                "confidence": evidence.get("confidence"),
+                "privacyImpact": evidence.get("privacyImpact"),
+                "supports": evidence.get("supports", []),
+                "contradicts": evidence.get("contradicts", []),
+                "humanExplanation": evidence.get("humanExplanation"),
+            }
+            for evidence in assessment.get("evidence", [])
+            if evidence.get("source") != "DECISION_POLICY"
+        ][:6]
+        for section_name in ("decision", "role", "provenance"):
+            section = assessment.get(section_name)
+            if isinstance(section, dict):
+                section.pop("evidenceIds", None)
+        assessment["riskVector"] = {
+            "suppressed": True,
+            "reason": "Exact risk vector values are reserved for authorized full reports.",
+        }
+        assessment["evidenceGraph"] = {
+            "nodes": [],
+            "edges": [],
+            "suppressed": True,
+            "reason": "REDACTED_TEASER suppresses raw graph detail; request an authorized full report.",
+        }
+        trace = assessment.get("decisionTrace") or {}
+        assessment["decisionTrace"] = {
+            "policyVersion": trace.get("policyVersion"),
+            "matchedRuleCount": len([rule for rule in trace.get("evaluatedRules", []) if rule.get("matched") is True]),
+            "invariantFailureCount": len([item for item in trace.get("invariantChecks", []) if item.get("passed") is False]),
+            "suppressed": True,
+            "reason": "Detailed policy trace is reserved for the authorized full report.",
+        }
+    for finding in redacted.get("defensiveSurfaceFindings", []):
+        finding.pop("findingId", None)
+        finding["evidence"] = []
+        finding.pop("rawValue", None)
+        finding["detailSuppressed"] = True
+    redacted["temporalEpisodes"] = [
+        {
+            "packageName": episode.get("packageName"),
+            "type": episode.get("type"),
+            "causalStrength": "TEMPORAL_CORRELATION_ONLY"
+            if episode.get("type") == "SPECIAL_ACCESS_PLUS_SENSITIVE_APP"
+            else "SEQUENCE_PATTERN",
+            "detailSuppressed": True,
+            "explanation": episode.get("explanation"),
+        }
+        for episode in redacted.get("temporalEpisodes", [])
+    ]
+    if redacted.get("scanHistory"):
+        history = redacted.get("scanHistory") or {}
+        redacted["scanHistory"] = {
+            "schemaVersion": history.get("schemaVersion", 1),
+            "retainedScanCount": history.get("retainedScanCount"),
+            "retainedPackageCount": history.get("retainedPackageCount"),
+            "scans": history.get("scans", []),
+            "packageListsSuppressed": True,
+            "reason": "REDACTED_TEASER suppresses full-inventory package alias lists.",
+        }
+    return redacted
+
+
 def priority_score(assessment: dict[str, Any], posture: dict[str, Any] | None) -> tuple[int, float]:
     color_order = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GRAY": 3, "GREEN": 4}
     color = assessment.get("decision", {}).get("color", "GREEN")
@@ -548,6 +653,8 @@ def redact_export(
     context = RedactionContext(export, salt=salt)
     if mode == REDACTED_EXPERT:
         return redacted_expert_export(export, context, salt_provided=salt_provided)
+    if mode == REDACTED_TEASER:
+        return redacted_teaser_export(export, context, salt_provided=salt_provided)
     return minimal_support_export(
         export,
         context,

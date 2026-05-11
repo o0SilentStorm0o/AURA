@@ -11,6 +11,10 @@ Privacy modes:
 - `redacted_expert`: keeps the per-app evidence structure but replaces package
   names with per-report HMAC-SHA256 aliases, removes labels, source paths,
   component names, raw signing digests, and installer package identifiers.
+- `redacted_teaser`: conservative outreach/demo mode. It redacts identifiers
+  and suppresses raw evidence, exact component names, full evidence graph
+  details, detailed decision trace, permission lists, and exact risk vector
+  values. Use it only for target-scoped public-surface teaser reports.
 - `minimal_support`: keeps aggregate counts plus a priority-only redacted subset
   of assessments. It does not include the full package inventory.
 

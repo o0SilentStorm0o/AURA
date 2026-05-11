@@ -57,6 +57,38 @@ class AssetDrivenRulesTest {
     }
 
     @Test
+    fun cameraPermissionAloneDoesNotForceCameraRole() {
+        val engine = RoleInferenceEngine()
+
+        val result = engine.infer(
+            TestSnapshots.app(
+                packageName = "sk.azet.bistro",
+                appLabel = "Bistro.sk",
+                requestedPermissions = listOf(
+                    "android.permission.CAMERA",
+                    "android.permission.ACCESS_FINE_LOCATION"
+                )
+            )
+        )
+
+        assertEquals(RoleCategory.ECOMMERCE_MARKETPLACE, result.role.predicted)
+    }
+
+    @Test
+    fun civicInformationAppGetsPublicInformationRole() {
+        val engine = RoleInferenceEngine()
+
+        val result = engine.infer(
+            TestSnapshots.app(
+                packageName = "cz.ackee.isnemovna",
+                appLabel = "iSnemovna"
+            )
+        )
+
+        assertEquals(RoleCategory.PUBLIC_INFORMATION, result.role.predicted)
+    }
+
+    @Test
     fun customPermissionHarmAssetInfluencesDecisionWithoutParallelDetector() {
         val engine = AuraAssessmentEngine(
             roleInferenceEngine = RoleInferenceEngine(),

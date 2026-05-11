@@ -60,6 +60,29 @@ python3 tools/report_generator/generate_report.py \
   --basename aura-app-owner-offline-report
 ```
 
+Public-surface teaser mode is for cold outreach/demo material. It is
+target-scoped, automatically forces `redacted_teaser`, and intentionally
+suppresses raw evidence, exact component names, evidence graph details, policy
+trace detail, signing values, source paths, and exploitability detail:
+
+```bash
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --evaluation artifacts/scenario_runner/evaluation.json \
+  --report-type public_teaser \
+  --target-package com.example.app \
+  --client-name "Example Studio" \
+  --public-app-name "Example Public App" \
+  --public-source-url "https://play.google.com/store/apps/details?id=com.example.app" \
+  --max-findings 3 \
+  --out-dir artifacts/demos/example-app \
+  --basename aura-public-teaser
+```
+
+Teaser reports must be manually reviewed before sending. They should be framed
+as a sample of AURA's reporting structure, not as a vulnerability disclosure or
+a final security verdict about the target app.
+
 For customer or external expert sharing, generate reports through a privacy
 mode:
 
@@ -80,6 +103,9 @@ Supported modes:
 - `redacted_expert`: full evidence/report structure with package identifiers,
   labels, source paths, component names, installers, and signing digests
   redacted.
+- `redacted_teaser`: high-level target-scoped outreach mode with raw evidence,
+  component names, detailed decision trace, evidence graph, permission lists,
+  and exact risk vector values suppressed.
 - `minimal_support`: aggregate counts plus priority-only redacted assessment
   details, without full package inventory.
 

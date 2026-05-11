@@ -67,7 +67,8 @@ class RoleInferenceEngine(
             addCandidate(RoleCategory.SYSTEM_COMPONENT, 0.80, "AOSP provider package is treated as a platform component.", "android-provider")
         }
 
-        if ("CAMERA" in permissions || "camera" in packageName || "camera" in label) {
+        val cameraNamingSignals = listOf("camera", "photo", "video").any { it in packageName || it in label }
+        if ("CAMERA" in permissions && cameraNamingSignals) {
             addCandidate(RoleCategory.CAMERA, 0.86, "Camera capability and naming match a camera role.", "camera-signals")
         }
         if ("ACCESS_FINE_LOCATION" in permissions && listOf("map", "maps", "navigation", "nav").any { it in packageName || it in label }) {
@@ -109,6 +110,47 @@ class RoleInferenceEngine(
         }
         if (listOf("bank", "pay", "wallet").any { it in packageName || it in label }) {
             addCandidate(RoleCategory.PAYMENT_BANKING, 0.72, "Payment/banking naming signals are present.", "payment-signals")
+        }
+        if (listOf(
+                "shop",
+                "store",
+                "market",
+                "marketplace",
+                "commerce",
+                "bistro",
+                "restaurant",
+                "delivery",
+                "food",
+                "bikeflip",
+                "rohlik",
+                "kosik",
+                "qerko",
+                "oriflame"
+            ).any { it in packageName || it in label }
+        ) {
+            addCandidate(
+                RoleCategory.ECOMMERCE_MARKETPLACE,
+                0.76,
+                "Commerce, marketplace, delivery, or shopping naming signals are present.",
+                "commerce-marketplace-signals"
+            )
+        }
+        if (listOf(
+                "snemovna",
+                "parliament",
+                "public",
+                "civic",
+                "guide",
+                "info",
+                "news"
+            ).any { it in packageName || it in label }
+        ) {
+            addCandidate(
+                RoleCategory.PUBLIC_INFORMATION,
+                0.72,
+                "Public-information, civic, guide, or news naming signals are present.",
+                "public-information-signals"
+            )
         }
         if (snapshot.isSystemApp && listOf("telemetry", "analytics", "stats", "metrics").any { it in packageName || it in label }) {
             addCandidate(RoleCategory.OEM_TELEMETRY_SERVICE, 0.68, "System app has telemetry or metrics naming signals.", "telemetry-signals")

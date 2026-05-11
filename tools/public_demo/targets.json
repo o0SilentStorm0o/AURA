@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "gastromapa",
+      "clientName": "Futured",
+      "appName": "Gastromapa Lukase Hejlika",
+      "packageName": "com.thefuntasty.gmlh",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.thefuntasty.gmlh",
+      "caseStudyUrl": "https://www.futured.app/cs/pripadove-studie/gastromapa-lukase-hejlika",
+      "wave": "first",
+      "sensitivity": "low",
+      "outreachAngle": "Location and food/travel app capabilities can be explained without permission panic."
+    },
+    {
+      "id": "bikeflip",
+      "clientName": "Pixelmate",
+      "appName": "Bikeflip",
+      "packageName": "com.bikeflip.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.bikeflip.app",
+      "caseStudyUrl": "https://pixelmate.cz/en/reference-bikeflip-app",
+      "wave": "first",
+      "sensitivity": "low",
+      "outreachAngle": "Marketplace, user content, chat, and location context are useful for showing role-normalized reporting."
+    },
+    {
+      "id": "bistro",
+      "clientName": "GoodRequest",
+      "appName": "Bistro.sk",
+      "packageName": "sk.azet.bistro",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=sk.azet.bistro",
+      "caseStudyUrl": "https://www.goodrequest.com/work/bistro",
+      "wave": "first",
+      "sensitivity": "low",
+      "outreachAngle": "Food delivery, orders, and payments are useful without starting from a regulated health or banking target."
+    },
+    {
+      "id": "isnemovna",
+      "clientName": "Ackee",
+      "appName": "iSnemovna",
+      "packageName": "cz.ackee.isnemovna",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=cz.ackee.isnemovna",
+      "caseStudyUrl": "https://play.google.com/store/apps/developer?id=Ackee",
+      "wave": "first",
+      "sensitivity": "low",
+      "outreachAngle": "A public app directly tied to Ackee is safer for first outreach than a banking client app."
+    }
+  ]
+}
