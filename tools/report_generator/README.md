@@ -46,7 +46,12 @@ The report separates:
 - threat decision from defensive posture,
 - user-actionable alerts from BLUE platform audit findings,
 - concrete evidence from no-root observability limits,
+- provenance trust/explainability from provenance classification confidence,
 - AURA decisions from permission-only/capability-only baselines.
+
+HTML output is generated without JavaScript, escapes app-provided strings, and
+includes a restrictive Content-Security-Policy meta tag. This matters because
+package labels and evidence strings can be attacker-controlled.
 
 The HTML report can be opened in a browser and printed/saved as PDF. A future
 renderer may automate PDF generation, but the report data model should remain

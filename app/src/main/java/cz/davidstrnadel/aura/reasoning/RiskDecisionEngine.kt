@@ -21,6 +21,7 @@ import cz.davidstrnadel.aura.core.UserRiskStory
 import cz.davidstrnadel.aura.core.clampedScore
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.min
 
 data class RiskDecisionResult(
     val riskVector: RiskVector,
@@ -46,25 +47,27 @@ class RiskDecisionEngine(
         val actionabilityClass = actionability(snapshot)
         val actionability = actionabilityScore(actionabilityClass)
         val abuseEvidence = abuseEvidence(snapshot, provenanceClass, activeRiskyCapability)
-        val uncertainty = uncertainty(snapshot, roleConfidence, provenanceConfidence)
+        val provenanceTrust = provenanceTrust(provenanceClass, provenanceConfidence)
+        val uncertainty = uncertainty(snapshot, roleConfidence, provenanceTrust)
 
         val vector = RiskVector(
             harm = harm,
             legitimacy = legitimacy,
             abuseEvidence = abuseEvidence,
             provenanceConfidence = provenanceConfidence,
+            provenanceTrust = provenanceTrust,
             actionability = actionability,
             uncertainty = uncertainty
         )
 
         val evidence = EvidenceFactory.item(
             source = EvidenceSource.DECISION_POLICY,
-            rawValue = "harm=$harm;legitimacy=$legitimacy;abuse=$abuseEvidence;actionability=$actionability;uncertainty=$uncertainty",
+            rawValue = "harm=$harm;legitimacy=$legitimacy;abuse=$abuseEvidence;provenanceClassificationConfidence=$provenanceConfidence;provenanceTrust=$provenanceTrust;actionability=$actionability;uncertainty=$uncertainty",
             normalizedValue = "risk-vector",
             confidence = 0.88,
             observabilityState = ObservabilityState.OBSERVED_ENABLED,
             supports = listOf("risk.vector"),
-            humanExplanation = "AURA separates capability exposure, role legitimacy, provenance confidence, abuse evidence, user actionability, and uncertainty."
+            humanExplanation = "AURA separates capability exposure, role legitimacy, provenance classification confidence, provenance trust, abuse evidence, user actionability, and uncertainty."
         )
 
         val ruleInputs = ruleInputs(
@@ -72,6 +75,7 @@ class RiskDecisionEngine(
             legitimacy = legitimacy,
             abuseEvidence = abuseEvidence,
             provenanceConfidence = provenanceConfidence,
+            provenanceTrust = provenanceTrust,
             actionability = actionability,
             uncertainty = uncertainty,
             activeRiskyCapability = activeRiskyCapability,
@@ -89,11 +93,11 @@ class RiskDecisionEngine(
             abuseEvidence < 0.35 &&
             role in setOf(RoleCategory.UNKNOWN_SIDELOAD, RoleCategory.UNKNOWN_UTILITY) &&
             provenanceClass in setOf(ProvenanceClass.UNKNOWN_SIDELOAD, ProvenanceClass.UNKNOWN)
-        val greenExpectedRoleMatched = legitimacy >= 0.70 && provenanceConfidence >= 0.62 && abuseEvidence < 0.35
+        val greenExpectedRoleMatched = legitimacy >= 0.70 && provenanceTrust >= 0.62 && abuseEvidence < 0.35
         val bluePlatformAuditMatched = harm >= 0.55 &&
             actionability < 0.55 &&
             provenanceClass in platformAuditClasses &&
-            (legitimacy < 0.75 || provenanceConfidence < 0.65)
+            (legitimacy < 0.75 || provenanceTrust < 0.65)
         val grayUncertaintyMatched = uncertainty >= 0.62 && abuseEvidence < 0.45
         val evaluatedRules = listOf(
             policyRule(
@@ -249,6 +253,7 @@ class RiskDecisionEngine(
         legitimacy: Double,
         abuseEvidence: Double,
         provenanceConfidence: Double,
+        provenanceTrust: Double,
         actionability: Double,
         uncertainty: Double,
         activeRiskyCapability: Boolean,
@@ -259,7 +264,8 @@ class RiskDecisionEngine(
         "harm" to harm.scoreText(),
         "legitimacy" to legitimacy.scoreText(),
         "abuseEvidence" to abuseEvidence.scoreText(),
-        "provenanceConfidence" to provenanceConfidence.scoreText(),
+        "provenanceClassificationConfidence" to provenanceConfidence.scoreText(),
+        "provenanceTrust" to provenanceTrust.scoreText(),
         "actionability" to actionability.scoreText(),
         "uncertainty" to uncertainty.scoreText(),
         "activeRiskyCapability" to activeRiskyCapability.toString(),
@@ -347,9 +353,6 @@ class RiskDecisionEngine(
                 requiredChanges = buildList {
                     if (activeRiskyCapability) {
                         add("Disable active risky special access such as Accessibility, notification listener, or overlay.")
-                    }
-                    if (!snapshot.isSystemApp) {
-                        add("Uninstall the app or remove the user-controlled risky capability.")
                     }
                 }.ifEmpty { listOf("Remove concrete abuse evidence while preserving the raw export for review.") },
                 userActionable = true
@@ -596,7 +599,7 @@ class RiskDecisionEngine(
     private fun uncertainty(
         snapshot: ObservedAppSnapshot,
         roleConfidence: Double,
-        provenanceConfidence: Double
+        provenanceTrust: Double
     ): Double {
         val unknownStates = snapshot.specialAccess.values.count {
             it == ObservabilityState.UNKNOWN_API_LIMITATION ||
@@ -604,7 +607,26 @@ class RiskDecisionEngine(
                 it == ObservabilityState.USER_GRANT_REQUIRED
         }
         val observabilityPenalty = (unknownStates * 0.08).coerceAtMost(0.24)
-        return (1.0 - ((roleConfidence + provenanceConfidence) / 2.0) + observabilityPenalty).clampedScore()
+        return (1.0 - ((roleConfidence + provenanceTrust) / 2.0) + observabilityPenalty).clampedScore()
+    }
+
+    private fun provenanceTrust(
+        provenanceClass: ProvenanceClass,
+        classificationConfidence: Double
+    ): Double {
+        val classTrustCeiling = when (provenanceClass) {
+            ProvenanceClass.AOSP_KNOWN -> 0.88
+            ProvenanceClass.GOOGLE_KNOWN -> 0.88
+            ProvenanceClass.PLAY_INSTALLED -> 0.76
+            ProvenanceClass.FDROID_OR_OPEN_SOURCE -> 0.72
+            ProvenanceClass.OEM_SIGNED_SYSTEM -> 0.54
+            ProvenanceClass.CARRIER_COMPONENT -> 0.46
+            ProvenanceClass.THIRD_PARTY_PREINSTALL -> 0.42
+            ProvenanceClass.OPAQUE_PRIVILEGED -> 0.34
+            ProvenanceClass.UNKNOWN_SIDELOAD -> 0.18
+            ProvenanceClass.UNKNOWN -> 0.24
+        }
+        return min(classTrustCeiling, classificationConfidence).clampedScore()
     }
 
     private fun hasActiveRiskyCapability(snapshot: ObservedAppSnapshot): Boolean =

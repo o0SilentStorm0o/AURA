@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import hmac
 import json
 import re
 from collections import Counter
@@ -18,6 +19,19 @@ REDACTED_EXPERT = "redacted_expert"
 MINIMAL_SUPPORT = "minimal_support"
 PRIVACY_MODES = (FULL_RESEARCH, REDACTED_EXPERT, MINIMAL_SUPPORT)
 DEFAULT_SALT = "aura-public-redaction-v1"
+GENERIC_LABELS = {
+    "android",
+    "android system",
+    "aura",
+    "google",
+    "settings",
+    "phone",
+    "contacts",
+    "camera",
+    "messages",
+    "files",
+    "calendar",
+}
 
 SOURCE_PATH_RE = re.compile(
     r"/(?:data|system|system_ext|product|vendor|odm|apex)[^\s;,:\"']*?\.apk",
@@ -31,7 +45,7 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def stable_hash(value: str, salt: str) -> str:
-    return hashlib.sha256(f"{salt}:{value}".encode("utf-8")).hexdigest()
+    return hmac.new(salt.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def source_partition(source_dir: str) -> str:
@@ -141,7 +155,9 @@ class RedactionContext:
         if snapshot.get("packageName"):
             packages.add(str(snapshot["packageName"]))
         if snapshot.get("appLabel"):
-            self.label_values.add(str(snapshot["appLabel"]))
+            label = str(snapshot["appLabel"])
+            if label.strip().lower() not in GENERIC_LABELS:
+                self.label_values.add(label)
         if snapshot.get("sourceDir"):
             self.source_paths.add(str(snapshot["sourceDir"]))
         if snapshot.get("installerPackageName"):
@@ -232,10 +248,10 @@ def privacy_metadata(mode: str, *, full_inventory: bool, salt_provided: bool) ->
         "mode": mode.upper(),
         "redactionApplied": mode != FULL_RESEARCH,
         "fullInventoryIncluded": full_inventory,
-        "packageIdentifierStrategy": "salted_sha256_alias" if mode != FULL_RESEARCH else "raw",
+        "packageIdentifierStrategy": "hmac_sha256_alias" if mode != FULL_RESEARCH else "raw",
         "appLabels": "redacted" if mode != FULL_RESEARCH else "raw",
         "sourcePaths": "redacted_to_partition" if mode != FULL_RESEARCH else "raw",
-        "signingDigests": "short_salted_hash" if mode != FULL_RESEARCH else "raw",
+        "signingDigests": "short_hmac_hash" if mode != FULL_RESEARCH else "raw",
         "salt": "provided" if salt_provided else "default_reproducible",
         "notice": "Exports can reveal installed apps and device context; share only with trusted reviewers.",
     }

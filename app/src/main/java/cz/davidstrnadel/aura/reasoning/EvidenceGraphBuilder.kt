@@ -138,10 +138,11 @@ class EvidenceGraphBuilder {
     private fun RiskVector.toGraphValue(): String =
         String.format(
             Locale.US,
-            "H=%.2f L=%.2f E=%.2f P=%.2f A=%.2f U=%.2f",
+            "H=%.2f L=%.2f E=%.2f PT=%.2f PC=%.2f A=%.2f U=%.2f",
             harm,
             legitimacy,
             abuseEvidence,
+            provenanceTrust,
             provenanceConfidence,
             actionability,
             uncertainty

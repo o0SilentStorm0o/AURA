@@ -22,13 +22,14 @@ Use for trusted local research and reproducibility.
 
 Use for external expert review when per-app evidence structure is still needed.
 
-- Replaces package names with stable salted aliases.
+- Replaces package names with per-report HMAC-SHA256 aliases.
 - Redacts app labels, source paths, installer package identifiers, component
   names, version names, UIDs, and raw signing digests.
 - Keeps role/provenance/risk/decision/evidence structure so the reviewer can
   inspect why AURA decided `RED`, `YELLOW`, `BLUE`, `GRAY`, or `GREEN`.
 - Keeps full inventory count and per-app records, but without raw identifiers.
-- Requires a project/customer-specific salt for real sharing.
+- Requires a project/customer-specific salt for real sharing. Treat that salt as
+  the HMAC secret and do not include it in public sample reports.
 
 ### MINIMAL_SUPPORT
 

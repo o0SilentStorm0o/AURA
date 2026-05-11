@@ -207,6 +207,7 @@ class RedactExportTest(unittest.TestCase):
 
         self.assertEqual(redacted["privacy"]["mode"], "REDACTED_EXPERT")
         self.assertTrue(redacted["privacy"]["fullInventoryIncluded"])
+        self.assertEqual(redacted["privacy"]["packageIdentifierStrategy"], "hmac_sha256_alias")
         self.assertEqual(len(redacted["assessments"]), 2)
         self.assertEqual(redacted["assessments"][0]["decision"]["color"], "RED")
         self.assertIn("app_", redacted["assessments"][0]["snapshot"]["packageName"])

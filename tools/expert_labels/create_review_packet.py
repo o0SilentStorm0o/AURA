@@ -21,7 +21,8 @@ CSV_FIELDS = [
     "role",
     "roleConfidence",
     "provenance",
-    "provenanceConfidence",
+    "provenanceTrust",
+    "provenanceClassificationConfidence",
     "harm",
     "legitimacy",
     "abuseEvidence",
@@ -59,6 +60,27 @@ def score(value: Any) -> str:
         return f"{float(value):.4f}"
     except (TypeError, ValueError):
         return ""
+
+
+def provenance_trust(assessment: dict[str, Any]) -> float:
+    risk = assessment.get("riskVector", {})
+    if "provenanceTrust" in risk:
+        return float(risk.get("provenanceTrust", 0.0) or 0.0)
+    provenance = assessment.get("provenance", {})
+    confidence = float(provenance.get("confidence", risk.get("provenanceConfidence", 0.0)) or 0.0)
+    ceiling = {
+        "AOSP_KNOWN": 0.88,
+        "GOOGLE_KNOWN": 0.88,
+        "PLAY_INSTALLED": 0.76,
+        "FDROID_OR_OPEN_SOURCE": 0.72,
+        "OEM_SIGNED_SYSTEM": 0.54,
+        "CARRIER_COMPONENT": 0.46,
+        "THIRD_PARTY_PREINSTALL": 0.42,
+        "OPAQUE_PRIVILEGED": 0.34,
+        "UNKNOWN_SIDELOAD": 0.18,
+        "UNKNOWN": 0.24,
+    }.get(str(provenance.get("provenanceClass", "UNKNOWN")), 0.24)
+    return max(0.0, min(ceiling, confidence))
 
 
 def defensive_findings_by_package(export: dict[str, Any]) -> dict[str, list[str]]:
@@ -142,7 +164,8 @@ def row_for_assessment(
         "role": role.get("predicted", ""),
         "roleConfidence": score(role.get("confidence")),
         "provenance": provenance.get("provenanceClass", ""),
-        "provenanceConfidence": score(provenance.get("confidence")),
+        "provenanceTrust": score(provenance_trust(assessment)),
+        "provenanceClassificationConfidence": score(provenance.get("confidence")),
         "harm": score(risk.get("harm")),
         "legitimacy": score(risk.get("legitimacy")),
         "abuseEvidence": score(risk.get("abuseEvidence")),

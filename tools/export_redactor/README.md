@@ -9,8 +9,8 @@ Privacy modes:
 - `full_research`: preserves the full export and annotates it with privacy
   metadata. Use only for trusted local research workflows.
 - `redacted_expert`: keeps the per-app evidence structure but replaces package
-  names with stable salted aliases, removes labels, source paths, component
-  names, raw signing digests, and installer package identifiers.
+  names with per-report HMAC-SHA256 aliases, removes labels, source paths,
+  component names, raw signing digests, and installer package identifiers.
 - `minimal_support`: keeps aggregate counts plus a priority-only redacted subset
   of assessments. It does not include the full package inventory.
 
@@ -24,7 +24,8 @@ python3 tools/export_redactor/redact_export.py \
   --out artifacts/privacy/aura-redacted-expert.json
 ```
 
-For real customer or expert sharing, pass a project-specific `--salt`. The
+For real customer or expert sharing, pass a project-specific `--salt`. The salt
+acts as the HMAC secret and must not be included in public sample reports. The
 default salt is reproducible for tests and demos, but it should not be treated
 as unlinkability protection across public exports.
 

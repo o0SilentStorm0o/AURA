@@ -82,6 +82,9 @@ class DecisionPolicyTest {
 
         assertEquals(DecisionColor.GRAY, assessment.decision.color)
         assertFalse(assessment.decision.userAlert)
+        assertTrue(assessment.riskVector.provenanceTrust < assessment.riskVector.provenanceConfidence)
+        assertTrue(assessment.decisionTrace.thresholdInputs.containsKey("provenanceTrust"))
+        assertTrue(assessment.decisionTrace.thresholdInputs.containsKey("provenanceClassificationConfidence"))
         assertTrue(assessment.decision.recommendedActions.any { it.actionId == "abstain_collect_more_context" })
         assertTrue(assessment.decisionTrace.evaluatedRules.any { it.ruleId == "GRAY_UNKNOWN_LOW_EXPOSURE" && it.matched })
     }
@@ -113,6 +116,11 @@ class DecisionPolicyTest {
         assertTrue(assessment.decision.recommendedActions.any { it.destructive })
         assertTrue(assessment.decisionTrace.evaluatedRules.any { it.ruleId == "RED_USER_ACTIONABLE_THREAT" && it.matched })
         assertTrue(assessment.decisionTrace.counterfactuals.any { it.targetDecision == DecisionColor.YELLOW })
+        assertFalse(
+            assessment.decisionTrace.counterfactuals
+                .flatMap { it.requiredChanges }
+                .any { it.contains("uninstall", ignoreCase = true) }
+        )
         assertTrue(assessment.decisionTrace.invariantChecks.all { it.passed })
         assertEquals("Action required", assessment.userRiskStory.headline)
     }

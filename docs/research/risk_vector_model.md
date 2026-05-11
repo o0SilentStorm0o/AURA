@@ -6,17 +6,24 @@ AURA avoids a single permission score. Each app receives:
 H: capability harm potential
 L: role legitimacy fit
 E: abuse evidence
-P: provenance confidence
+PT: provenance trust / explainability
+PC: provenance classification confidence
 A: user actionability
 U: uncertainty
 ```
+
+`PT` and `PC` are intentionally separate. AURA can be confident that an app
+belongs to `UNKNOWN_SIDELOAD` while still assigning low trust/explainability to
+that provenance class. In schema v1, older exports may still contain
+`provenanceConfidence`; report and evaluator tooling interpret that field as
+classification confidence and derive provenance trust from the provenance class.
 
 Decision policy:
 
 - `RED`: high harm, high abuse evidence, low role legitimacy, active risky capability, high user actionability.
 - `BLUE`: platform/OEM/security-research audit relevance; never a primary panic alert.
 - `GRAY`: insufficient evidence or high uncertainty without concrete abuse evidence.
-- `GREEN`: expected for role, sufficient provenance confidence, low abuse evidence.
+- `GREEN`: expected for role, sufficient provenance trust/explainability, low abuse evidence.
 - `YELLOW`: review recommended but not a panic alert.
 
 Each `AuraDecision` also exports deterministic `recommendedActions`.

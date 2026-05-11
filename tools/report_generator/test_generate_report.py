@@ -27,6 +27,17 @@ def export_fixture() -> dict:
                     "appLabel": "Security Update",
                     "installerPackageName": None,
                     "rawFeatures": {"sourcePartition": "data_app"},
+                    "specialAccess": {
+                        "accessibility_service": "OBSERVED_ENABLED",
+                        "notification_listener": "OBSERVED_ENABLED",
+                        "overlay": "OBSERVED_ENABLED",
+                    },
+                    "apiLevel": 34,
+                    "androidVersion": "14",
+                    "securityPatchLevel": "2023-09-05",
+                    "collectorVersion": "aura-collector-test",
+                    "deviceModel": "Pixel Test",
+                    "flavor": "researchFull/standard",
                 },
                 "role": {"predicted": "UNKNOWN_SIDELOAD", "confidence": 0.62},
                 "provenance": {"provenanceClass": "UNKNOWN_SIDELOAD", "confidence": 0.66},
@@ -35,6 +46,7 @@ def export_fixture() -> dict:
                     "legitimacy": 0.18,
                     "abuseEvidence": 0.86,
                     "provenanceConfidence": 0.66,
+                    "provenanceTrust": 0.18,
                     "actionability": 0.86,
                     "uncertainty": 0.2,
                 },
@@ -113,6 +125,8 @@ def export_fixture() -> dict:
 
 def evaluation_fixture() -> dict:
     return {
+        "evaluatedApps": 10,
+        "labelledApps": 1,
         "metrics": {"decision_trace_completeness": 1.0},
         "modelMetrics": {
             "permission_only": {
@@ -143,18 +157,47 @@ class GenerateReportTest(unittest.TestCase):
         markdown = render_markdown(export_fixture(), evaluation_fixture())
 
         self.assertIn("AURA Android App Risk Report", markdown)
+        self.assertIn("Overall Conclusion", markdown)
+        self.assertIn("Scope and Environment", markdown)
         self.assertIn("Threat decision: `RED`", markdown)
         self.assertIn("Defensive posture: `WEAK_DEFENSIVE_SURFACE`", markdown)
         self.assertIn("Decision trace:", markdown)
+        self.assertIn("Baseline Comparison on Labelled Scenario Subset", markdown)
+        self.assertIn("Unlabelled apps excluded from baseline metrics: `9`", markdown)
         self.assertIn("Non-actionable critical alert reduction", markdown)
+        self.assertIn("Provenance trust/explainability: `0.18`", markdown)
+        self.assertIn("SETTINGS_SNAPSHOT / OBSERVED_ENABLED: `accessibility_service`", markdown)
+        self.assertNotIn("DECISION_POLICY / OBSERVED_ENABLED", markdown)
         self.assertIn("Observability Limits", markdown)
 
     def test_html_is_print_ready_and_escapes_content(self) -> None:
         html = render_html("# Title\n\n- value with <tag>\n")
 
         self.assertIn("<!doctype html>", html)
+        self.assertIn("Content-Security-Policy", html)
         self.assertIn("@media print", html)
         self.assertIn("&lt;tag&gt;", html)
+
+    def test_html_escapes_attacker_controlled_app_strings(self) -> None:
+        payload = export_fixture()
+        payload["assessments"][0]["snapshot"]["appLabel"] = "<script>alert(1)</script>"
+        payload["assessments"][0]["snapshot"]["specialAccess"] = {}
+        payload["temporalEpisodes"] = []
+        payload["assessments"][0]["evidence"].append(
+            {
+                "source": "ROLE_RULE",
+                "observabilityState": "OBSERVED_ENABLED",
+                "confidence": 0.7,
+                "humanExplanation": "<img src=x onerror=alert(1)>",
+            }
+        )
+
+        html = render_html(render_markdown(payload, evaluation_fixture()))
+
+        self.assertNotIn("<script>alert(1)</script>", html)
+        self.assertNotIn("<img src=x onerror=alert(1)>", html)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
+        self.assertIn("&lt;img src=x onerror=alert(1)&gt;", html)
 
     def test_write_report_creates_markdown_and_html(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -175,6 +218,7 @@ class GenerateReportTest(unittest.TestCase):
         markdown = render_markdown(redacted, evaluation_fixture())
 
         self.assertIn("Report privacy mode: `REDACTED_EXPERT`", markdown)
+        self.assertIn("Package identifiers: `hmac_sha256_alias`", markdown)
         self.assertNotIn("com.flashlight.cleaner.update", markdown)
         self.assertNotIn("Security Update", markdown)
 

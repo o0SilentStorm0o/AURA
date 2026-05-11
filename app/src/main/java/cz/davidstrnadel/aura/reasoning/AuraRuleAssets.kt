@@ -178,7 +178,7 @@ class AuraRuleAssets(
             "RED" to "high harm + high abuse evidence + low role legitimacy + active risky capability + high user actionability",
             "BLUE" to "platform/OEM/security research audit finding; never primary panic queue",
             "GRAY" to "insufficient evidence or high uncertainty without abuse evidence",
-            "GREEN" to "expected for role with sufficient provenance confidence and low abuse evidence",
+            "GREEN" to "expected for role with sufficient provenance trust and low abuse evidence",
             "YELLOW" to "review recommended, not panic"
         )
 

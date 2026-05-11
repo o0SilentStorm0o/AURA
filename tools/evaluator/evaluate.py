@@ -84,13 +84,37 @@ def role_aware(assessment: dict[str, Any]) -> BaselineResult:
     return BaselineResult("role_aware", "CRITICAL" if score >= 0.65 else "REVIEW", score)
 
 
+def provenance_trust(assessment: dict[str, Any]) -> float:
+    vector = assessment.get("riskVector", {})
+    if "provenanceTrust" in vector:
+        return float(vector.get("provenanceTrust", 0.0))
+
+    provenance = assessment.get("provenance", {})
+    classification_confidence = float(
+        provenance.get("confidence", vector.get("provenanceConfidence", 0.0)) or 0.0
+    )
+    class_trust_ceiling = {
+        "AOSP_KNOWN": 0.88,
+        "GOOGLE_KNOWN": 0.88,
+        "PLAY_INSTALLED": 0.76,
+        "FDROID_OR_OPEN_SOURCE": 0.72,
+        "OEM_SIGNED_SYSTEM": 0.54,
+        "CARRIER_COMPONENT": 0.46,
+        "THIRD_PARTY_PREINSTALL": 0.42,
+        "OPAQUE_PRIVILEGED": 0.34,
+        "UNKNOWN_SIDELOAD": 0.18,
+        "UNKNOWN": 0.24,
+    }.get(str(provenance.get("provenanceClass", "UNKNOWN")), 0.24)
+    return max(0.0, min(class_trust_ceiling, classification_confidence))
+
+
 def role_provenance(assessment: dict[str, Any]) -> BaselineResult:
     vector = assessment.get("riskVector", {})
     score = max(
         0.0,
         vector.get("harm", 0.0)
         - vector.get("legitimacy", 0.0) * 0.35
-        - vector.get("provenanceConfidence", 0.0) * 0.20,
+        - provenance_trust(assessment) * 0.20,
     )
     return BaselineResult("role_provenance", "CRITICAL" if score >= 0.60 else "REVIEW", score)
 
@@ -184,6 +208,10 @@ def evaluate(export: dict[str, Any], labels: dict[str, ScenarioLabel] | None = N
                 if invariant.get("passed") is False
             ),
             "riskStoryHeadline": risk_story.get("headline"),
+            "provenanceClassificationConfidence": assessment.get("provenance", {}).get(
+                "confidence", assessment.get("riskVector", {}).get("provenanceConfidence")
+            ),
+            "provenanceTrust": provenance_trust(assessment),
             "defensivePostureClass": defensive_posture.get("postureClass"),
             "defensiveFindingTypes": sorted(defensive_findings_by_package.get(package_name, [])),
             "baselines": [baseline.__dict__ for baseline in baselines],

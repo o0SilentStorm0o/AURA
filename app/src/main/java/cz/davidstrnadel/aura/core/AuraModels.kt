@@ -78,6 +78,7 @@ data class RiskVector(
     val legitimacy: Double,
     val abuseEvidence: Double,
     val provenanceConfidence: Double,
+    val provenanceTrust: Double,
     val actionability: Double,
     val uncertainty: Double
 )

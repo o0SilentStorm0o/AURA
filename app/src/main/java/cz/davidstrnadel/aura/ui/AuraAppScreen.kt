@@ -593,7 +593,8 @@ private fun RiskVectorBars(assessment: AuraAssessment) {
     ScoreBar("harm", assessment.riskVector.harm)
     ScoreBar("legitimacy", assessment.riskVector.legitimacy)
     ScoreBar("abuse", assessment.riskVector.abuseEvidence)
-    ScoreBar("provenance", assessment.riskVector.provenanceConfidence)
+    ScoreBar("prov trust", assessment.riskVector.provenanceTrust)
+    ScoreBar("prov class", assessment.riskVector.provenanceConfidence)
     ScoreBar("actionability", assessment.riskVector.actionability)
     ScoreBar("uncertainty", assessment.riskVector.uncertainty)
 }
