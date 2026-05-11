@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -18,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
 from redact_export import DEFAULT_SALT, FULL_RESEARCH, PRIVACY_MODES, redact_export
 
 
-REPORT_GENERATOR_VERSION = "0.2.0"
+REPORT_GENERATOR_VERSION = "0.3.0"
+REPORT_TYPES = ("device_expert", "app_owner")
 DECISION_ORDER = {"RED": 0, "YELLOW": 1, "BLUE": 2, "GRAY": 3, "GREEN": 4}
 POSTURE_ORDER = {
     "WEAK_DEFENSIVE_SURFACE": 0,
@@ -173,18 +175,72 @@ def title_for_app(assessment: dict[str, Any]) -> str:
     return f"{label} ({snapshot.get('packageName', '')})"
 
 
+def package_name(assessment: dict[str, Any]) -> str:
+    return str(assessment.get("snapshot", {}).get("packageName", ""))
+
+
+def scope_export_to_package(export: dict[str, Any], target_package: str) -> dict[str, Any]:
+    scoped = copy.deepcopy(export)
+    assessments = [
+        assessment for assessment in scoped.get("assessments", [])
+        if package_name(assessment) == target_package
+    ]
+    if not assessments:
+        raise ValueError(f"Target package {target_package!r} was not found in export {export.get('scanId', 'unknown')}")
+    scoped["assessments"] = assessments
+    scoped["temporalEpisodes"] = [
+        episode for episode in scoped.get("temporalEpisodes", [])
+        if episode.get("packageName") == target_package
+    ]
+    scoped["defensiveSurfaceFindings"] = [
+        finding for finding in scoped.get("defensiveSurfaceFindings", [])
+        if finding.get("packageName") == target_package
+    ]
+    scoped["defensivePostures"] = [
+        posture for posture in scoped.get("defensivePostures", [])
+        if posture.get("packageName") == target_package
+    ]
+    scoped["summary"] = {
+        **(scoped.get("summary") or {}),
+        "assessedAppCount": len(scoped["assessments"]),
+        "decisionCounts": dict(decision_counts(scoped)),
+        "defensivePostureCounts": dict(posture_counts(scoped)),
+        "temporalEpisodeCount": len(scoped.get("temporalEpisodes", [])),
+        "defensiveFindingCount": len(scoped.get("defensiveSurfaceFindings", [])),
+    }
+    scoped.setdefault("reportScope", {})
+    scoped["reportScope"] = {
+        **scoped["reportScope"],
+        "reportType": "app_owner",
+        "targetPackage": target_package,
+    }
+    return scoped
+
+
+def mark_target_only_privacy(export: dict[str, Any]) -> dict[str, Any]:
+    privacy = export.setdefault("privacy", {})
+    privacy["fullInventoryIncluded"] = False
+    privacy["reportScope"] = "target_app_only"
+    return export
+
+
 def privacy_lines(export: dict[str, Any]) -> list[str]:
     privacy = export.get("privacy") or {}
+    report_scope = export.get("reportScope") or {}
+    app_owner_scope = report_scope.get("reportType") == "app_owner"
     mode = privacy.get("mode", "FULL_RESEARCH")
     lines = [f"- Report privacy mode: `{mode}`"]
+    if app_owner_scope:
+        lines.append("- Report scope: `target_app_only`")
     if mode == "FULL_RESEARCH":
         lines.append("- Full research exports may contain package inventory, app labels, source paths, and signing digests.")
+        lines.append(f"- Full device inventory rows included: `{'no' if app_owner_scope else 'yes'}`")
         lines.append("- Direct package names included: `yes`")
         lines.append("")
         return lines
 
     lines += [
-        f"- Full inventory rows included: `{bool_text(privacy.get('fullInventoryIncluded', False))}`",
+        f"- Full device inventory rows included: `{'no' if app_owner_scope else bool_text(privacy.get('fullInventoryIncluded', False))}`",
         "- Direct package names included: `no`",
         "- Package aliases are per-report pseudonyms; the alias mapping is not included in this redacted report.",
         f"- Package identifiers: `{privacy.get('packageIdentifierStrategy', 'unknown')}`",
@@ -577,6 +633,294 @@ def temporal_window(episode: dict[str, Any]) -> str:
         return "unknown"
 
 
+def masvs_mapping(finding_type: str | None) -> tuple[str, str]:
+    mapping = {
+        "UNPROTECTED_EXPORTED_COMPONENT": (
+            "MASVS-PLATFORM",
+            "Platform interaction and exposed Android component review",
+        ),
+        "CLEARTEXT_TRAFFIC_ALLOWED": (
+            "MASVS-NETWORK",
+            "Network transport security and cleartext traffic review",
+        ),
+        "BACKUP_ALLOWED_SENSITIVE_APP": (
+            "MASVS-STORAGE",
+            "Sensitive data persistence, backup, and restore surface review",
+        ),
+        "DEBUGGABLE_SENSITIVE_APP": (
+            "MASVS-CODE / MASVS-RESILIENCE",
+            "Build hardening and debug configuration review",
+        ),
+    }
+    return mapping.get(str(finding_type), ("MASVS-GENERAL", "Manual mobile security review"))
+
+
+def remediation_for_finding(finding_type: str | None) -> str:
+    return {
+        "UNPROTECTED_EXPORTED_COMPONENT": "Set exported=false when external entry is not needed, or protect the component with an appropriate permission/signature permission and validate all inbound intents/deep links.",
+        "CLEARTEXT_TRAFFIC_ALLOWED": "Disable cleartext by default and move detailed network_security_config review to the offline APK analyzer or source review.",
+        "BACKUP_ALLOWED_SENSITIVE_APP": "Disable unrestricted backup for sensitive apps or define explicit backup/data-extraction rules that exclude secrets and regulated data.",
+        "DEBUGGABLE_SENSITIVE_APP": "Ship release builds with debuggable=false and verify the final APK/AAB generated for distribution.",
+    }.get(str(finding_type), "Review the finding manually and document whether it is fixed, accepted risk, or not applicable.")
+
+
+def defensive_finding_id(index: int) -> str:
+    return f"AURA-DEF-{index:03d}"
+
+
+def defensive_findings_section(findings: list[dict[str, Any]]) -> list[str]:
+    lines = ["## Defensive Findings and Remediation", ""]
+    if not findings:
+        return lines + ["No defensive surface findings were exported for the target app.", ""]
+    lines += [
+        "| Finding ID | Type | Severity | Confidence | MASVS/MASTG area | Status | Remediation |",
+        "| --- | --- | --- | ---: | --- | --- | --- |",
+    ]
+    for index, finding in enumerate(
+        sorted(
+            findings,
+            key=lambda item: (
+                SEVERITY_ORDER.get(item.get("severity", "INFO"), 9),
+                str(item.get("findingType", "")),
+            ),
+        ),
+        start=1,
+    ):
+        area, detail = masvs_mapping(finding.get("findingType"))
+        lines.append(
+            f"| `{defensive_finding_id(index)}` | `{finding.get('findingType')}` | `{finding.get('severity')}` | "
+            f"{score(finding.get('confidence'))} | {md_escape(area)}: {md_escape(detail)} | `open` | "
+            f"{md_escape(remediation_for_finding(finding.get('findingType')))} |"
+        )
+    lines += [
+        "",
+        "Status values are report workflow markers. Use `open`, `fixed`, `accepted risk`, or `not reproducible` during retest review.",
+        "",
+    ]
+    return lines
+
+
+def capability_surface_section(assessment: dict[str, Any]) -> list[str]:
+    snapshot = assessment.get("snapshot", {})
+    raw = snapshot.get("rawFeatures", {})
+    requested = snapshot.get("requestedPermissions", [])
+    granted = snapshot.get("grantedPermissions", [])
+    special = snapshot.get("specialAccess", {})
+    components = snapshot.get("components", [])
+    exported_components = [component for component in components if component.get("exported") is True]
+    unprotected_exported = [
+        component for component in exported_components
+        if not component.get("permission") and not component.get("isLauncherEntryPoint", False)
+    ]
+    lines = [
+        "## Capability and Component Surface",
+        "",
+        "| Surface | Value |",
+        "| --- | --- |",
+        f"| Requested permissions | `{len(requested)}` |",
+        f"| Granted permissions | `{len(granted)}` |",
+        f"| Declared components | `{len(components) or raw.get('componentCount', 'unknown')}` |",
+        f"| Exported components | `{len(exported_components) or raw.get('exportedComponentCount', 'unknown')}` |",
+        f"| Unprotected exported components | `{len(unprotected_exported) or raw.get('unprotectedExportedComponentCount', 'unknown')}` |",
+        f"| allowBackup | `{raw.get('allowBackup', 'unknown')}` |",
+        f"| debuggable | `{raw.get('debuggable', 'unknown')}` |",
+        f"| usesCleartextTraffic | `{raw.get('usesCleartextTraffic', 'unknown')}` |",
+        f"| network security config observability | `{raw.get('networkSecurityConfigObservability', 'unknown')}` |",
+        "",
+    ]
+    if special:
+        lines += ["Special access states:", ""]
+        lines += [f"- `{name}`: `{state}`" for name, state in sorted(special.items())]
+        lines += [""]
+    if requested:
+        lines += ["Requested permissions sample:", ""]
+        lines += [f"- `{permission}`" for permission in requested[:16]]
+        if len(requested) > 16:
+            lines.append(f"- ... `{len(requested) - 16}` more")
+        lines += [""]
+    return lines
+
+
+def remediation_checklist_section(
+    assessment: dict[str, Any],
+    findings: list[dict[str, Any]],
+) -> list[str]:
+    lines = ["## Remediation Checklist", ""]
+    items: list[str] = []
+    for action in assessment.get("decision", {}).get("recommendedActions", []):
+        items.append(f"{action.get('title', action.get('actionId', 'Action'))}: {action.get('description', '')}")
+    for finding in findings:
+        items.append(f"{finding.get('findingType')}: {remediation_for_finding(finding.get('findingType'))}")
+    if not items:
+        return lines + ["No remediation checklist items were generated for the target app.", ""]
+    for index, item in enumerate(items, start=1):
+        lines.append(f"{index}. [open] {item}")
+    lines += [
+        "",
+        "Retest expectation: rerun AURA after changes and compare threat decision, defensive posture, finding types, and evidence IDs against this report.",
+        "",
+    ]
+    return lines
+
+
+def retest_comparison_section(
+    current_export: dict[str, Any],
+    previous_export: dict[str, Any] | None,
+) -> list[str]:
+    lines = ["## Retest Comparison", ""]
+    if previous_export is None:
+        return lines + [
+            "No previous export was supplied. Generate a before/after comparison with `--previous-export <path>`.",
+            "",
+        ]
+    current_assessment = current_export.get("assessments", [{}])[0]
+    previous_assessment = previous_export.get("assessments", [{}])[0]
+    current_package = package_name(current_assessment)
+    previous_package = package_name(previous_assessment)
+    current_posture = postures_by_package(current_export).get(current_package, {})
+    previous_posture = postures_by_package(previous_export).get(previous_package, {})
+    current_findings = {finding.get("findingType") for finding in current_export.get("defensiveSurfaceFindings", [])}
+    previous_findings = {finding.get("findingType") for finding in previous_export.get("defensiveSurfaceFindings", [])}
+    fixed = sorted(previous_findings - current_findings)
+    remaining = sorted(previous_findings & current_findings)
+    new = sorted(current_findings - previous_findings)
+    lines += [
+        "| Field | Previous | Current |",
+        "| --- | --- | --- |",
+        f"| Threat decision | `{previous_assessment.get('decision', {}).get('color', 'unknown')}` | `{current_assessment.get('decision', {}).get('color', 'unknown')}` |",
+        f"| Defensive posture | `{previous_posture.get('postureClass', 'unknown')}` | `{current_posture.get('postureClass', 'unknown')}` |",
+        f"| Defensive finding types | `{', '.join(sorted(previous_findings)) or 'none'}` | `{', '.join(sorted(current_findings)) or 'none'}` |",
+        "",
+        f"- Fixed finding types: `{', '.join(fixed) or 'none'}`",
+        f"- Remaining finding types: `{', '.join(remaining) or 'none'}`",
+        f"- New/regressed finding types: `{', '.join(new) or 'none'}`",
+        "",
+    ]
+    return lines
+
+
+def app_owner_summary_section(
+    export: dict[str, Any],
+    assessment: dict[str, Any],
+    posture: dict[str, Any],
+    findings: list[dict[str, Any]],
+    episodes: list[dict[str, Any]],
+) -> list[str]:
+    decision = assessment.get("decision", {})
+    if findings:
+        finding_text = f"{len(findings)} defensive finding(s): {top_finding_types(findings, limit=5)}"
+    else:
+        finding_text = "no exported defensive surface findings"
+    return [
+        "## Executive Summary",
+        "",
+        f"- Target app: `{md_escape(title_for_app(assessment))}`",
+        f"- Generated at: `{iso_time(export.get('generatedAt'))}`",
+        f"- Threat decision: `{decision.get('color')}` / {decision.get('title', '')}",
+        f"- Defensive posture: `{posture.get('postureClass', 'NO_OBSERVED_WEAKNESS')}`",
+        f"- Defensive findings: `{finding_text}`",
+        f"- Temporal episodes for target: `{len(episodes)}`",
+        "",
+        "AURA separates whether the app looks like a user-actionable threat from whether the app has defensive implementation weaknesses. A `GREEN` threat decision can still coexist with weak defensive posture.",
+        "",
+    ]
+
+
+def app_owner_scope_section(export: dict[str, Any], assessment: dict[str, Any]) -> list[str]:
+    snapshot = assessment.get("snapshot", {})
+    raw = snapshot.get("rawFeatures", {})
+    return [
+        "## Scope and Environment",
+        "",
+        "| Field | Value |",
+        "| --- | --- |",
+        "| Report type | App owner / developer defensive surface report |",
+        f"| Target package | `{snapshot.get('packageName', 'unknown')}` |",
+        f"| Target label | `{snapshot.get('appLabel', 'unknown')}` |",
+        f"| Version | `{snapshot.get('versionName', 'unknown')}` / `{snapshot.get('versionCode', 'unknown')}` |",
+        f"| Scan ID | `{export.get('scanId', 'unknown')}` |",
+        f"| Build/flavor | `{export.get('flavor', snapshot.get('flavor', 'unknown'))}` |",
+        f"| Device model | `{snapshot.get('deviceModel', 'unknown')}` |",
+        f"| Android version / API | `{snapshot.get('androidVersion', 'unknown')}` / `{snapshot.get('apiLevel', 'unknown')}` |",
+        f"| Security patch level | `{snapshot.get('securityPatchLevel', 'unknown')}` |",
+        f"| Collector version | `{snapshot.get('collectorVersion', 'unknown')}` |",
+        f"| Source partition | `{raw.get('sourcePartition', 'unknown')}` |",
+        f"| Installer | `{snapshot.get('installerPackageName') or 'none_or_unknown'}` |",
+        "",
+        "Out of scope: no TLS MITM, no screen or notification content reading, no dynamic exploit proof, no root/kernel/baseband/TEE forensics.",
+        "",
+    ]
+
+
+def render_app_owner_markdown(
+    export: dict[str, Any],
+    *,
+    previous_export: dict[str, Any] | None = None,
+) -> str:
+    assessment = export.get("assessments", [{}])[0]
+    package = package_name(assessment)
+    postures = postures_by_package(export)
+    findings = findings_by_package(export).get(package, [])
+    package_episodes = episodes_by_package(export).get(package, [])
+    posture = postures.get(package, {})
+    lines = [
+        "# AURA App Owner Risk & Defensive Surface Report",
+        "",
+        f"Generated from scan `{export.get('scanId', 'unknown')}`.",
+        "",
+    ]
+    lines += app_owner_summary_section(export, assessment, posture, findings, package_episodes)
+    lines += [
+        "## Overall Conclusion",
+        "",
+        f"The target app received threat decision `{assessment.get('decision', {}).get('color')}` and defensive posture `{posture.get('postureClass', 'NO_OBSERVED_WEAKNESS')}`.",
+        "",
+        "For app-owner use, prioritize fixing defensive findings and then retest. Threat decisions describe observed abuse/actionability context; defensive posture describes hardening and exposed surface.",
+        "",
+    ]
+    lines += app_owner_scope_section(export, assessment)
+    lines += [
+        "## Methodology",
+        "",
+        "This app-owner report focuses on one target APK/app context. It does not try to certify that the app is malware-free. It explains role/provenance/capability evidence, defensive posture, observability limits, and concrete remediation work.",
+        "",
+        "MASVS/MASTG mappings are broad review areas, not a claim that AURA is a complete OWASP MASVS scanner.",
+        "",
+        "Report privacy:",
+        "",
+    ]
+    lines += privacy_lines(export)
+    lines += ["## Target Application Assessment", ""]
+    lines += app_detail_section(
+        assessment,
+        posture,
+        findings,
+        package_episodes,
+        "AURA-TARGET-001",
+    )
+    lines += capability_surface_section(assessment)
+    lines += defensive_findings_section(findings)
+    lines += remediation_checklist_section(assessment, findings)
+    lines += retest_comparison_section(export, previous_export)
+    lines += [
+        "## Observability Limits",
+        "",
+        "- On-device AURA observes manifest/component metadata and best-effort cleartext/debuggable/backup indicators where Android exposes them.",
+        "- Detailed `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, and `accessibilityDataSensitive` checks belong to the offline APK analyzer or source review.",
+        "- Defensive findings are app-hardening signals, not malware verdicts.",
+        "",
+    ]
+    lines += reproducibility_section(export)
+    lines += [
+        "## Technical Appendix",
+        "",
+        "- The JSON export remains the source of truth for raw features, evidence IDs, decision trace, and retest comparison.",
+        "- HTML output escapes app-provided strings and includes a restrictive Content-Security-Policy meta tag.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def app_detail_section(
     assessment: dict[str, Any],
     posture: dict[str, Any] | None,
@@ -676,7 +1020,14 @@ def render_markdown(
     evaluation: dict[str, Any] | None = None,
     *,
     top_apps: int = 12,
+    report_type: str = "device_expert",
+    previous_export: dict[str, Any] | None = None,
 ) -> str:
+    if report_type == "app_owner":
+        return render_app_owner_markdown(export, previous_export=previous_export)
+    if report_type != "device_expert":
+        raise ValueError(f"Unsupported report_type {report_type!r}")
+
     counts = decision_counts(export)
     postures = postures_by_package(export)
     findings = findings_by_package(export)
@@ -999,9 +1350,17 @@ def write_report(
     out_dir: Path,
     basename: str,
     top_apps: int,
+    report_type: str = "device_expert",
+    previous_export: dict[str, Any] | None = None,
 ) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
-    markdown = render_markdown(export, evaluation, top_apps=top_apps)
+    markdown = render_markdown(
+        export,
+        evaluation,
+        top_apps=top_apps,
+        report_type=report_type,
+        previous_export=previous_export,
+    )
     markdown_path = out_dir / f"{basename}.md"
     html_path = out_dir / f"{basename}.html"
     markdown_path.write_text(markdown + "\n")
@@ -1016,6 +1375,9 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=Path("artifacts/reports"))
     parser.add_argument("--basename", default="aura-app-risk-report")
     parser.add_argument("--top-apps", type=int, default=12)
+    parser.add_argument("--report-type", choices=REPORT_TYPES, default="device_expert")
+    parser.add_argument("--target-package", help="Required for --report-type app_owner; package to scope the report to")
+    parser.add_argument("--previous-export", type=Path, help="Optional previous AURA export for app-owner retest comparison")
     parser.add_argument("--privacy-mode", choices=PRIVACY_MODES, default=FULL_RESEARCH)
     parser.add_argument("--salt", default=DEFAULT_SALT, help="Project/customer-specific redaction salt")
     parser.add_argument(
@@ -1028,12 +1390,30 @@ def main() -> int:
     export = load_json(args.export)
     if export is None:
         raise ValueError(f"Could not load export {args.export}")
+    previous_export = load_json(args.previous_export)
+    if args.report_type == "app_owner":
+        if not args.target_package:
+            raise ValueError("--target-package is required when --report-type app_owner")
+        export = scope_export_to_package(export, args.target_package)
+        if previous_export is not None:
+            previous_export = scope_export_to_package(previous_export, args.target_package)
     export = redact_export(
         export,
         mode=args.privacy_mode,
         salt=args.salt,
         salt_provided=args.salt != DEFAULT_SALT,
     )
+    if args.report_type == "app_owner":
+        export = mark_target_only_privacy(export)
+    if previous_export is not None:
+        previous_export = redact_export(
+            previous_export,
+            mode=args.privacy_mode,
+            salt=args.salt,
+            salt_provided=args.salt != DEFAULT_SALT,
+        )
+        if args.report_type == "app_owner":
+            previous_export = mark_target_only_privacy(previous_export)
     if args.redacted_export_out:
         args.redacted_export_out.parent.mkdir(parents=True, exist_ok=True)
         args.redacted_export_out.write_text(json.dumps(export, indent=2, sort_keys=True) + "\n")
@@ -1044,6 +1424,8 @@ def main() -> int:
         out_dir=args.out_dir,
         basename=args.basename,
         top_apps=args.top_apps,
+        report_type=args.report_type,
+        previous_export=previous_export,
     )
     print(f"Wrote Markdown report to {markdown_path}")
     print(f"Wrote HTML report to {html_path}")

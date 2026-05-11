@@ -18,6 +18,34 @@ python3 tools/report_generator/generate_report.py \
   --basename aura-scenario-report
 ```
 
+Device/expert report is the default. It summarizes the visible inventory,
+priority RED/YELLOW/BLUE items, grouped GRAY abstentions, defensive posture
+highlights, temporal episodes, baseline comparison, and observability limits.
+
+App-owner report mode focuses the report on one package and removes the rest of
+the device inventory from the report surface:
+
+```bash
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --report-type app_owner \
+  --target-package com.example.app \
+  --out-dir artifacts/reports \
+  --basename aura-app-owner-report
+```
+
+For a before/after remediation review, pass a previous export:
+
+```bash
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --report-type app_owner \
+  --target-package com.example.app \
+  --previous-export artifacts/scenario_runner/aura-baseline-scan.json \
+  --out-dir artifacts/reports \
+  --basename aura-app-owner-retest
+```
+
 For customer or external expert sharing, generate reports through a privacy
 mode:
 
@@ -48,6 +76,15 @@ The report separates:
 - concrete evidence from no-root observability limits,
 - provenance trust/explainability from provenance classification confidence,
 - AURA decisions from permission-only/capability-only baselines.
+
+App-owner reports additionally include:
+
+- target-app scope and environment,
+- capability/component surface summary,
+- defensive finding IDs (`AURA-DEF-###`),
+- broad OWASP MASVS/MASTG review-area mapping,
+- remediation checklist with workflow status markers,
+- optional before/after retest comparison.
 
 HTML output is generated without JavaScript, escapes app-provided strings, and
 includes a restrictive Content-Security-Policy meta tag. This matters because

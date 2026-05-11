@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import copy
 import tempfile
 import unittest
 import sys
@@ -9,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from generate_report import render_html, render_markdown, write_report
+from generate_report import scope_export_to_package
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
 from redact_export import REDACTED_EXPERT, redact_export
@@ -221,6 +223,71 @@ class GenerateReportTest(unittest.TestCase):
         self.assertIn("Package identifiers: `hmac_sha256_alias`", markdown)
         self.assertNotIn("com.flashlight.cleaner.update", markdown)
         self.assertNotIn("Security Update", markdown)
+
+    def test_app_owner_report_focuses_target_and_remediation(self) -> None:
+        payload = export_fixture()
+        payload["assessments"].append(
+            {
+                "snapshot": {
+                    "packageName": "com.example.camera",
+                    "appLabel": "Camera",
+                    "rawFeatures": {"sourcePartition": "data_app"},
+                    "specialAccess": {},
+                },
+                "role": {"predicted": "CAMERA", "confidence": 0.9},
+                "provenance": {"provenanceClass": "PLAY_INSTALLED", "confidence": 0.78},
+                "riskVector": {
+                    "harm": 0.3,
+                    "legitimacy": 0.9,
+                    "abuseEvidence": 0.1,
+                    "provenanceTrust": 0.76,
+                    "provenanceConfidence": 0.78,
+                    "actionability": 0.1,
+                    "uncertainty": 0.1,
+                },
+                "decision": {"color": "GREEN", "title": "Expected for role", "recommendedActions": []},
+                "decisionTrace": {"policyVersion": "0.1.0", "evaluatedRules": [], "invariantChecks": []},
+                "userRiskStory": {},
+                "evidence": [],
+            }
+        )
+        scoped = scope_export_to_package(payload, "com.flashlight.cleaner.update")
+
+        markdown = render_markdown(scoped, report_type="app_owner")
+
+        self.assertIn("AURA App Owner Risk & Defensive Surface Report", markdown)
+        self.assertIn("Target Application Assessment", markdown)
+        self.assertIn("Capability and Component Surface", markdown)
+        self.assertIn("Defensive Findings and Remediation", markdown)
+        self.assertIn("MASVS-PLATFORM", markdown)
+        self.assertIn("Remediation Checklist", markdown)
+        self.assertIn("Retest Comparison", markdown)
+        self.assertIn("Report scope: `target_app_only`", markdown)
+        self.assertIn("Full device inventory rows included: `no`", markdown)
+        self.assertNotIn("com.example.camera", markdown)
+
+    def test_app_owner_retest_comparison_shows_fixed_and_new_findings(self) -> None:
+        previous = export_fixture()
+        current = copy.deepcopy(previous)
+        current["defensiveSurfaceFindings"] = [
+            {
+                "packageName": "com.flashlight.cleaner.update",
+                "findingType": "CLEARTEXT_TRAFFIC_ALLOWED",
+                "severity": "MEDIUM",
+                "confidence": 0.7,
+            }
+        ]
+        previous_scoped = scope_export_to_package(previous, "com.flashlight.cleaner.update")
+        current_scoped = scope_export_to_package(current, "com.flashlight.cleaner.update")
+
+        markdown = render_markdown(
+            current_scoped,
+            report_type="app_owner",
+            previous_export=previous_scoped,
+        )
+
+        self.assertIn("Fixed finding types: `UNPROTECTED_EXPORTED_COMPONENT`", markdown)
+        self.assertIn("New/regressed finding types: `CLEARTEXT_TRAFFIC_ALLOWED`", markdown)
 
 
 if __name__ == "__main__":
