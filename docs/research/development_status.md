@@ -35,6 +35,8 @@ This document separates what exists in the current Research MVP from planned wor
 - Expert review packet generator that converts an AURA export into reviewer CSV
   plus an `UNLABELED` labels template that is skipped by the evaluator until
   explicitly reviewed.
+- Report generator that turns AURA JSON exports and optional evaluator output
+  into Markdown plus print-ready HTML Android App Risk reports.
 - Research-console UI with decision counts, scan-history summary, selectable app
   detail, risk-vector bars, actionability/provenance/role fields, first-class
   evidence items, evidence graph summary, recommended actions, and per-app
@@ -46,6 +48,7 @@ This document separates what exists in the current Research MVP from planned wor
 - Full counterfactual remediation UI beyond the current exported trace summary.
 - Export redaction modes for full research, redacted expert, and minimal
   support exports.
+- Automated PDF rendering beyond browser print/save-as-PDF from generated HTML.
 - Multi-reviewer adjudication workflow beyond generated packets, schema
   validation, and controlled-scenario labels.
 - Firmware-scale OEM/preinstall analysis beyond safe APK inventory collection.
