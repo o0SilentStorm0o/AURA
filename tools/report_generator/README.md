@@ -46,6 +46,20 @@ python3 tools/report_generator/generate_report.py \
   --basename aura-app-owner-retest
 ```
 
+App-owner reports can also include static/offline APK analyzer evidence:
+
+```bash
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --report-type app_owner \
+  --target-package com.example.app \
+  --offline-analysis artifacts/scenario_runner/offline-apk-analysis.json \
+  --previous-export artifacts/scenario_runner/aura-baseline-scan.json \
+  --previous-offline-analysis artifacts/scenario_runner/offline-apk-analysis-before.json \
+  --out-dir artifacts/reports \
+  --basename aura-app-owner-offline-report
+```
+
 For customer or external expert sharing, generate reports through a privacy
 mode:
 
@@ -83,6 +97,7 @@ App-owner reports additionally include:
 - capability/component surface summary,
 - defensive finding IDs (`AURA-DEF-###`),
 - broad OWASP MASVS/MASTG review-area mapping,
+- offline APK analyzer findings with `OFFLINE_APK_ANALYZER` source labels,
 - remediation checklist with workflow status markers,
 - optional before/after retest comparison.
 

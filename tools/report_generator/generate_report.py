@@ -139,6 +139,15 @@ def top_finding_types(package_findings: list[dict[str, Any]], limit: int = 3) ->
     return ", ".join(dict.fromkeys(str(item.get("findingType", "unknown")) for item in ranked[:limit]))
 
 
+def top_offline_finding_types(offline_apk: dict[str, Any] | None, limit: int = 3) -> str:
+    if not offline_apk:
+        return "n/a"
+    findings = offline_apk.get("findings", [])
+    if not findings:
+        return "none"
+    return top_finding_types(findings, limit=limit)
+
+
 def iso_time(millis: int | float | None) -> str:
     if not millis:
         return "unknown"
@@ -222,6 +231,61 @@ def mark_target_only_privacy(export: dict[str, Any]) -> dict[str, Any]:
     privacy["fullInventoryIncluded"] = False
     privacy["reportScope"] = "target_app_only"
     return export
+
+
+def offline_apk_for_package(offline_analysis: dict[str, Any] | None, target_package: str) -> dict[str, Any] | None:
+    if not offline_analysis:
+        return None
+    candidates = offline_analysis.get("apks")
+    if isinstance(candidates, list):
+        for item in candidates:
+            if (item.get("apk") or {}).get("packageName") == target_package:
+                return item
+        return None
+    if "apk" in offline_analysis and "apks" not in offline_analysis:
+        apk_package = (offline_analysis.get("apk") or {}).get("packageName")
+        if apk_package == target_package or str(target_package).startswith("app_"):
+            return offline_analysis
+    if (offline_analysis.get("apk") or {}).get("packageName") == target_package:
+        return offline_analysis
+    return None
+
+
+def report_is_redacted(export: dict[str, Any]) -> bool:
+    return bool((export.get("privacy") or {}).get("redactionApplied"))
+
+
+def target_report_package(export: dict[str, Any]) -> str:
+    return (export.get("assessments") or [{}])[0].get("snapshot", {}).get("packageName", "")
+
+
+def redact_offline_value(value: Any, offline_apk: dict[str, Any], export: dict[str, Any]) -> str:
+    text = str(value or "")
+    if not report_is_redacted(export):
+        return text
+    apk = offline_apk.get("apk") or {}
+    raw_package = str(apk.get("packageName") or "")
+    raw_label = str(apk.get("label") or "")
+    raw_path = str(apk.get("path") or "")
+    alias = target_report_package(export) or "<target_app>"
+    output = text
+    if raw_path:
+        output = output.replace(raw_path, "<redacted:apk_path>")
+    if raw_package:
+        output = output.replace(raw_package, alias)
+    if raw_label:
+        output = output.replace(raw_label, "<app_label_redacted>")
+    return output
+
+
+def offline_apk_path_text(offline_apk: dict[str, Any], export: dict[str, Any]) -> str:
+    path = (offline_apk.get("apk") or {}).get("path", "")
+    return "<redacted:apk_path>" if report_is_redacted(export) and path else str(path or "unknown")
+
+
+def offline_sha_prefix(offline_apk: dict[str, Any]) -> str:
+    digest = (offline_apk.get("apk") or {}).get("sha256")
+    return str(digest)[:16] if digest else "unknown"
 
 
 def privacy_lines(export: dict[str, Any]) -> list[str]:
@@ -651,6 +715,34 @@ def masvs_mapping(finding_type: str | None) -> tuple[str, str]:
             "MASVS-CODE / MASVS-RESILIENCE",
             "Build hardening and debug configuration review",
         ),
+        "DEBUGGABLE_ENABLED": (
+            "MASVS-CODE / MASVS-RESILIENCE",
+            "Build hardening and debug configuration review",
+        ),
+        "BACKUP_ALLOWED": (
+            "MASVS-STORAGE",
+            "Sensitive data persistence, backup, and restore surface review",
+        ),
+        "CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST": (
+            "MASVS-NETWORK",
+            "Network transport security and cleartext traffic review",
+        ),
+        "NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED": (
+            "MASVS-NETWORK",
+            "Network security config cleartext traffic review",
+        ),
+        "FLAG_SECURE_NOT_OBSERVED_SENSITIVE_APP": (
+            "MASVS-PLATFORM",
+            "Sensitive UI exposure and screenshot/screen-sharing hardening review",
+        ),
+        "FILTER_TOUCHES_WHEN_OBSCURED_NOT_OBSERVED_SENSITIVE_APP": (
+            "MASVS-PLATFORM",
+            "Tapjacking and obscured-touch protection review",
+        ),
+        "ACCESSIBILITY_DATA_SENSITIVE_NOT_OBSERVED": (
+            "MASVS-PLATFORM",
+            "Accessibility exposure controls for sensitive UI review",
+        ),
     }
     return mapping.get(str(finding_type), ("MASVS-GENERAL", "Manual mobile security review"))
 
@@ -659,8 +751,15 @@ def remediation_for_finding(finding_type: str | None) -> str:
     return {
         "UNPROTECTED_EXPORTED_COMPONENT": "Set exported=false when external entry is not needed, or protect the component with an appropriate permission/signature permission and validate all inbound intents/deep links.",
         "CLEARTEXT_TRAFFIC_ALLOWED": "Disable cleartext by default and move detailed network_security_config review to the offline APK analyzer or source review.",
+        "CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST": "Set android:usesCleartextTraffic=false for release builds unless a tightly justified domain-specific exception is documented.",
+        "NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED": "Remove cleartextTrafficPermitted=true from network security config or scope it narrowly to non-sensitive debug/test endpoints.",
         "BACKUP_ALLOWED_SENSITIVE_APP": "Disable unrestricted backup for sensitive apps or define explicit backup/data-extraction rules that exclude secrets and regulated data.",
+        "BACKUP_ALLOWED": "Disable unrestricted backup for sensitive apps or define explicit backup/data-extraction rules that exclude secrets and regulated data.",
         "DEBUGGABLE_SENSITIVE_APP": "Ship release builds with debuggable=false and verify the final APK/AAB generated for distribution.",
+        "DEBUGGABLE_ENABLED": "Ship release builds with debuggable=false and verify the final APK/AAB generated for distribution.",
+        "FLAG_SECURE_NOT_OBSERVED_SENSITIVE_APP": "Review sensitive screens and add FLAG_SECURE where screenshots/screen-sharing exposure is unacceptable. Treat this as best-effort static evidence, not runtime proof.",
+        "FILTER_TOUCHES_WHEN_OBSCURED_NOT_OBSERVED_SENSITIVE_APP": "Review sensitive click targets for tapjacking defenses such as filterTouchesWhenObscured or equivalent UI handling.",
+        "ACCESSIBILITY_DATA_SENSITIVE_NOT_OBSERVED": "For Android versions that support it, review sensitive views for accessibilityDataSensitive or equivalent protections.",
     }.get(str(finding_type), "Review the finding manually and document whether it is fixed, accepted risk, or not applicable.")
 
 
@@ -673,8 +772,8 @@ def defensive_findings_section(findings: list[dict[str, Any]]) -> list[str]:
     if not findings:
         return lines + ["No defensive surface findings were exported for the target app.", ""]
     lines += [
-        "| Finding ID | Type | Severity | Confidence | MASVS/MASTG area | Status | Remediation |",
-        "| --- | --- | --- | ---: | --- | --- | --- |",
+        "| Finding ID | Source | Type | Severity | Confidence | MASVS/MASTG area | Status | Remediation |",
+        "| --- | --- | --- | --- | ---: | --- | --- | --- |",
     ]
     for index, finding in enumerate(
         sorted(
@@ -688,7 +787,7 @@ def defensive_findings_section(findings: list[dict[str, Any]]) -> list[str]:
     ):
         area, detail = masvs_mapping(finding.get("findingType"))
         lines.append(
-            f"| `{defensive_finding_id(index)}` | `{finding.get('findingType')}` | `{finding.get('severity')}` | "
+            f"| `{defensive_finding_id(index)}` | `ON_DEVICE` | `{finding.get('findingType')}` | `{finding.get('severity')}` | "
             f"{score(finding.get('confidence'))} | {md_escape(area)}: {md_escape(detail)} | `open` | "
             f"{md_escape(remediation_for_finding(finding.get('findingType')))} |"
         )
@@ -697,6 +796,104 @@ def defensive_findings_section(findings: list[dict[str, Any]]) -> list[str]:
         "Status values are report workflow markers. Use `open`, `fixed`, `accepted risk`, or `not reproducible` during retest review.",
         "",
     ]
+    return lines
+
+
+def offline_finding_id(index: int) -> str:
+    return f"AURA-OFF-{index:03d}"
+
+
+def offline_observation_rows(offline_apk: dict[str, Any]) -> list[str]:
+    observations = offline_apk.get("observations") or {}
+    network_config = observations.get("networkSecurityConfig") or {}
+    rows = [
+        ("Sensitive role hint", bool_text(observations.get("sensitiveRoleHint"))),
+        ("debuggable", bool_text(observations.get("debuggable"))),
+        ("allowBackup", bool_text(observations.get("allowBackup"))),
+        ("usesCleartextTraffic", bool_text(observations.get("usesCleartextTraffic"))),
+        ("networkSecurityConfig observability", network_config.get("observabilityState", "unknown")),
+        ("networkSecurityConfig referenced", network_config.get("referenced") or "none"),
+    ]
+    for key, label in (
+        ("flagSecure", "FLAG_SECURE"),
+        ("filterTouchesWhenObscured", "filterTouchesWhenObscured"),
+        ("accessibilityDataSensitive", "accessibilityDataSensitive"),
+    ):
+        item = observations.get(key) or {}
+        rows.append(
+            (
+                label,
+                f"observed={bool_text(item.get('observed'))}; obs={item.get('observabilityState', 'unknown')}; conf={score(item.get('confidence'))}",
+            )
+        )
+    return [f"| {label} | `{md_escape(value)}` |" for label, value in rows]
+
+
+def offline_apk_analyzer_section(
+    offline_apk: dict[str, Any] | None,
+    export: dict[str, Any],
+) -> list[str]:
+    lines = ["## Offline APK Analyzer Findings", ""]
+    if not offline_apk:
+        return lines + [
+            "No offline APK analyzer JSON was supplied for the target app. Use `--offline-analysis <path>` to include static APK/code/layout evidence.",
+            "",
+        ]
+
+    apk = offline_apk.get("apk") or {}
+    findings = offline_apk.get("findings", [])
+    lines += [
+        "| Field | Value |",
+        "| --- | --- |",
+        f"| Analyzer version | `{offline_apk.get('analyzerVersion', 'unknown')}` |",
+        f"| APK path | `{md_escape(offline_apk_path_text(offline_apk, export))}` |",
+        f"| APK SHA-256 prefix | `{offline_sha_prefix(offline_apk)}` |",
+        f"| APK package | `{md_escape(redact_offline_value(apk.get('packageName', 'unknown'), offline_apk, export))}` |",
+        f"| APK label | `{md_escape(redact_offline_value(apk.get('label', 'unknown'), offline_apk, export))}` |",
+        f"| targetSdkVersion | `{apk.get('targetSdkVersion', 'unknown')}` |",
+        "",
+        "Static observations:",
+        "",
+        "| Observation | Value |",
+        "| --- | --- |",
+    ]
+    lines += offline_observation_rows(offline_apk)
+    lines += [""]
+
+    if findings:
+        lines += [
+            "| Finding ID | Source | Type | Severity | Confidence | Observability | MASVS/MASTG area | Evidence | Remediation |",
+            "| --- | --- | --- | --- | ---: | --- | --- | --- | --- |",
+        ]
+        for index, finding in enumerate(
+            sorted(
+                findings,
+                key=lambda item: (
+                    SEVERITY_ORDER.get(item.get("severity", "INFO"), 9),
+                    str(item.get("findingType", "")),
+                ),
+            ),
+            start=1,
+        ):
+            area, detail = masvs_mapping(finding.get("findingType"))
+            evidence_value = redact_offline_value(finding.get("rawValue", ""), offline_apk, export)
+            lines.append(
+                f"| `{offline_finding_id(index)}` | `OFFLINE_APK_ANALYZER` | `{finding.get('findingType')}` | `{finding.get('severity')}` | "
+                f"{score(finding.get('confidence'))} | `{finding.get('observabilityState', 'unknown')}` | "
+                f"{md_escape(area)}: {md_escape(detail)} | {md_escape(evidence_value)} | "
+                f"{md_escape(remediation_for_finding(finding.get('findingType')))} |"
+            )
+    else:
+        lines += ["No offline APK analyzer findings were emitted for the target APK."]
+    lines += [
+        "",
+        "Offline findings are static evidence. Absence of a defensive API pattern is a best-effort signal, not runtime proof.",
+        "",
+    ]
+    for limitation in offline_apk.get("limitations", []):
+        lines.append(f"- {limitation}")
+    if offline_apk.get("limitations"):
+        lines.append("")
     return lines
 
 
@@ -744,13 +941,29 @@ def capability_surface_section(assessment: dict[str, Any]) -> list[str]:
 def remediation_checklist_section(
     assessment: dict[str, Any],
     findings: list[dict[str, Any]],
+    offline_apk: dict[str, Any] | None = None,
 ) -> list[str]:
     lines = ["## Remediation Checklist", ""]
     items: list[str] = []
+    seen: set[str] = set()
     for action in assessment.get("decision", {}).get("recommendedActions", []):
-        items.append(f"{action.get('title', action.get('actionId', 'Action'))}: {action.get('description', '')}")
+        if action.get("actionId") == "no_user_action_required":
+            continue
+        item = f"{action.get('title', action.get('actionId', 'Action'))}: {action.get('description', '')}"
+        key = f"action:{action.get('actionId', item)}"
+        if key not in seen:
+            items.append(item)
+            seen.add(key)
     for finding in findings:
-        items.append(f"{finding.get('findingType')}: {remediation_for_finding(finding.get('findingType'))}")
+        key = f"on-device:{finding.get('findingType')}"
+        if key not in seen:
+            items.append(f"{finding.get('findingType')}: {remediation_for_finding(finding.get('findingType'))}")
+            seen.add(key)
+    for finding in (offline_apk or {}).get("findings", []):
+        key = f"offline:{finding.get('findingType')}"
+        if key not in seen:
+            items.append(f"{finding.get('findingType')} (offline): {remediation_for_finding(finding.get('findingType'))}")
+            seen.add(key)
     if not items:
         return lines + ["No remediation checklist items were generated for the target app.", ""]
     for index, item in enumerate(items, start=1):
@@ -766,6 +979,8 @@ def remediation_checklist_section(
 def retest_comparison_section(
     current_export: dict[str, Any],
     previous_export: dict[str, Any] | None,
+    current_offline_apk: dict[str, Any] | None = None,
+    previous_offline_apk: dict[str, Any] | None = None,
 ) -> list[str]:
     lines = ["## Retest Comparison", ""]
     if previous_export is None:
@@ -781,19 +996,28 @@ def retest_comparison_section(
     previous_posture = postures_by_package(previous_export).get(previous_package, {})
     current_findings = {finding.get("findingType") for finding in current_export.get("defensiveSurfaceFindings", [])}
     previous_findings = {finding.get("findingType") for finding in previous_export.get("defensiveSurfaceFindings", [])}
+    current_offline_findings = {finding.get("findingType") for finding in (current_offline_apk or {}).get("findings", [])}
+    previous_offline_findings = {finding.get("findingType") for finding in (previous_offline_apk or {}).get("findings", [])}
     fixed = sorted(previous_findings - current_findings)
     remaining = sorted(previous_findings & current_findings)
     new = sorted(current_findings - previous_findings)
+    offline_fixed = sorted(previous_offline_findings - current_offline_findings)
+    offline_remaining = sorted(previous_offline_findings & current_offline_findings)
+    offline_new = sorted(current_offline_findings - previous_offline_findings)
     lines += [
         "| Field | Previous | Current |",
         "| --- | --- | --- |",
         f"| Threat decision | `{previous_assessment.get('decision', {}).get('color', 'unknown')}` | `{current_assessment.get('decision', {}).get('color', 'unknown')}` |",
         f"| Defensive posture | `{previous_posture.get('postureClass', 'unknown')}` | `{current_posture.get('postureClass', 'unknown')}` |",
-        f"| Defensive finding types | `{', '.join(sorted(previous_findings)) or 'none'}` | `{', '.join(sorted(current_findings)) or 'none'}` |",
+        f"| On-device defensive finding types | `{', '.join(sorted(previous_findings)) or 'none'}` | `{', '.join(sorted(current_findings)) or 'none'}` |",
+        f"| Offline APK finding types | `{', '.join(sorted(previous_offline_findings)) or 'none'}` | `{', '.join(sorted(current_offline_findings)) or 'none'}` |",
         "",
-        f"- Fixed finding types: `{', '.join(fixed) or 'none'}`",
-        f"- Remaining finding types: `{', '.join(remaining) or 'none'}`",
-        f"- New/regressed finding types: `{', '.join(new) or 'none'}`",
+        f"- Fixed on-device finding types: `{', '.join(fixed) or 'none'}`",
+        f"- Remaining on-device finding types: `{', '.join(remaining) or 'none'}`",
+        f"- New/regressed on-device finding types: `{', '.join(new) or 'none'}`",
+        f"- Fixed offline APK finding types: `{', '.join(offline_fixed) or 'none'}`",
+        f"- Remaining offline APK finding types: `{', '.join(offline_remaining) or 'none'}`",
+        f"- New/regressed offline APK finding types: `{', '.join(offline_new) or 'none'}`",
         "",
     ]
     return lines
@@ -805,12 +1029,14 @@ def app_owner_summary_section(
     posture: dict[str, Any],
     findings: list[dict[str, Any]],
     episodes: list[dict[str, Any]],
+    offline_apk: dict[str, Any] | None,
 ) -> list[str]:
     decision = assessment.get("decision", {})
     if findings:
         finding_text = f"{len(findings)} defensive finding(s): {top_finding_types(findings, limit=5)}"
     else:
         finding_text = "no exported defensive surface findings"
+    offline_text = top_offline_finding_types(offline_apk, limit=5)
     return [
         "## Executive Summary",
         "",
@@ -818,7 +1044,8 @@ def app_owner_summary_section(
         f"- Generated at: `{iso_time(export.get('generatedAt'))}`",
         f"- Threat decision: `{decision.get('color')}` / {decision.get('title', '')}",
         f"- Defensive posture: `{posture.get('postureClass', 'NO_OBSERVED_WEAKNESS')}`",
-        f"- Defensive findings: `{finding_text}`",
+        f"- On-device defensive findings: `{finding_text}`",
+        f"- Offline APK analyzer findings: `{offline_text}`",
         f"- Temporal episodes for target: `{len(episodes)}`",
         "",
         "AURA separates whether the app looks like a user-actionable threat from whether the app has defensive implementation weaknesses. A `GREEN` threat decision can still coexist with weak defensive posture.",
@@ -856,6 +1083,8 @@ def render_app_owner_markdown(
     export: dict[str, Any],
     *,
     previous_export: dict[str, Any] | None = None,
+    offline_analysis: dict[str, Any] | None = None,
+    previous_offline_analysis: dict[str, Any] | None = None,
 ) -> str:
     assessment = export.get("assessments", [{}])[0]
     package = package_name(assessment)
@@ -863,13 +1092,19 @@ def render_app_owner_markdown(
     findings = findings_by_package(export).get(package, [])
     package_episodes = episodes_by_package(export).get(package, [])
     posture = postures.get(package, {})
+    previous_package = package_name((previous_export or {}).get("assessments", [{}])[0]) if previous_export else ""
+    current_offline_apk = offline_apk_for_package(offline_analysis, (export.get("reportScope") or {}).get("targetPackage", package))
+    previous_offline_apk = offline_apk_for_package(
+        previous_offline_analysis,
+        (previous_export or {}).get("reportScope", {}).get("targetPackage", previous_package),
+    )
     lines = [
         "# AURA App Owner Risk & Defensive Surface Report",
         "",
         f"Generated from scan `{export.get('scanId', 'unknown')}`.",
         "",
     ]
-    lines += app_owner_summary_section(export, assessment, posture, findings, package_episodes)
+    lines += app_owner_summary_section(export, assessment, posture, findings, package_episodes, current_offline_apk)
     lines += [
         "## Overall Conclusion",
         "",
@@ -900,8 +1135,9 @@ def render_app_owner_markdown(
     )
     lines += capability_surface_section(assessment)
     lines += defensive_findings_section(findings)
-    lines += remediation_checklist_section(assessment, findings)
-    lines += retest_comparison_section(export, previous_export)
+    lines += offline_apk_analyzer_section(current_offline_apk, export)
+    lines += remediation_checklist_section(assessment, findings, current_offline_apk)
+    lines += retest_comparison_section(export, previous_export, current_offline_apk, previous_offline_apk)
     lines += [
         "## Observability Limits",
         "",
@@ -1022,9 +1258,16 @@ def render_markdown(
     top_apps: int = 12,
     report_type: str = "device_expert",
     previous_export: dict[str, Any] | None = None,
+    offline_analysis: dict[str, Any] | None = None,
+    previous_offline_analysis: dict[str, Any] | None = None,
 ) -> str:
     if report_type == "app_owner":
-        return render_app_owner_markdown(export, previous_export=previous_export)
+        return render_app_owner_markdown(
+            export,
+            previous_export=previous_export,
+            offline_analysis=offline_analysis,
+            previous_offline_analysis=previous_offline_analysis,
+        )
     if report_type != "device_expert":
         raise ValueError(f"Unsupported report_type {report_type!r}")
 
@@ -1352,6 +1595,8 @@ def write_report(
     top_apps: int,
     report_type: str = "device_expert",
     previous_export: dict[str, Any] | None = None,
+    offline_analysis: dict[str, Any] | None = None,
+    previous_offline_analysis: dict[str, Any] | None = None,
 ) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     markdown = render_markdown(
@@ -1360,6 +1605,8 @@ def write_report(
         top_apps=top_apps,
         report_type=report_type,
         previous_export=previous_export,
+        offline_analysis=offline_analysis,
+        previous_offline_analysis=previous_offline_analysis,
     )
     markdown_path = out_dir / f"{basename}.md"
     html_path = out_dir / f"{basename}.html"
@@ -1378,6 +1625,8 @@ def main() -> int:
     parser.add_argument("--report-type", choices=REPORT_TYPES, default="device_expert")
     parser.add_argument("--target-package", help="Required for --report-type app_owner; package to scope the report to")
     parser.add_argument("--previous-export", type=Path, help="Optional previous AURA export for app-owner retest comparison")
+    parser.add_argument("--offline-analysis", type=Path, help="Optional tools/apk_analyzer JSON output for the target APK")
+    parser.add_argument("--previous-offline-analysis", type=Path, help="Optional previous offline APK analyzer JSON for retest comparison")
     parser.add_argument("--privacy-mode", choices=PRIVACY_MODES, default=FULL_RESEARCH)
     parser.add_argument("--salt", default=DEFAULT_SALT, help="Project/customer-specific redaction salt")
     parser.add_argument(
@@ -1391,12 +1640,22 @@ def main() -> int:
     if export is None:
         raise ValueError(f"Could not load export {args.export}")
     previous_export = load_json(args.previous_export)
+    offline_analysis = load_json(args.offline_analysis)
+    previous_offline_analysis = load_json(args.previous_offline_analysis)
     if args.report_type == "app_owner":
         if not args.target_package:
             raise ValueError("--target-package is required when --report-type app_owner")
         export = scope_export_to_package(export, args.target_package)
         if previous_export is not None:
             previous_export = scope_export_to_package(previous_export, args.target_package)
+        if offline_analysis is not None:
+            offline_analysis = offline_apk_for_package(offline_analysis, args.target_package)
+            if offline_analysis is None:
+                raise ValueError(f"No offline APK analysis entry matched target package {args.target_package!r}")
+        if previous_offline_analysis is not None:
+            previous_offline_analysis = offline_apk_for_package(previous_offline_analysis, args.target_package)
+            if previous_offline_analysis is None:
+                raise ValueError(f"No previous offline APK analysis entry matched target package {args.target_package!r}")
     export = redact_export(
         export,
         mode=args.privacy_mode,
@@ -1426,6 +1685,8 @@ def main() -> int:
         top_apps=args.top_apps,
         report_type=args.report_type,
         previous_export=previous_export,
+        offline_analysis=offline_analysis,
+        previous_offline_analysis=previous_offline_analysis,
     )
     print(f"Wrote Markdown report to {markdown_path}")
     print(f"Wrote HTML report to {html_path}")

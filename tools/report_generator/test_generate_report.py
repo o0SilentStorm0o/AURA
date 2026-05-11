@@ -154,6 +154,67 @@ def evaluation_fixture() -> dict:
     }
 
 
+def offline_analysis_fixture(finding_type: str = "CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST") -> dict:
+    return {
+        "schemaVersion": 1,
+        "analyzerVersion": "aura-offline-apk-analyzer-test",
+        "generatedAt": 1_700_000_000_000,
+        "apks": [
+            {
+                "schemaVersion": 1,
+                "analyzerVersion": "aura-offline-apk-analyzer-test",
+                "apk": {
+                    "path": "/Users/david/AURA/testapps/suspicious/build/outputs/apk/debug/suspicious.apk",
+                    "sha256": "a" * 64,
+                    "packageName": "com.flashlight.cleaner.update",
+                    "label": "Security Update",
+                    "targetSdkVersion": "35",
+                },
+                "observations": {
+                    "sensitiveRoleHint": True,
+                    "debuggable": True,
+                    "allowBackup": False,
+                    "usesCleartextTraffic": True,
+                    "networkSecurityConfig": {
+                        "observabilityState": "OBSERVED_ENABLED",
+                        "referenced": "@xml/network_security_config",
+                    },
+                    "flagSecure": {
+                        "observed": False,
+                        "observabilityState": "UNKNOWN_API_LIMITATION",
+                        "confidence": 0.5,
+                    },
+                    "filterTouchesWhenObscured": {
+                        "observed": False,
+                        "observabilityState": "UNKNOWN_API_LIMITATION",
+                        "confidence": 0.42,
+                    },
+                    "accessibilityDataSensitive": {
+                        "observed": False,
+                        "observabilityState": "UNKNOWN_API_LIMITATION",
+                        "confidence": 0.35,
+                    },
+                },
+                "findings": [
+                    {
+                        "findingId": "offline-1",
+                        "findingType": finding_type,
+                        "severity": "MEDIUM",
+                        "confidence": 0.92,
+                        "observabilityState": "OBSERVED_ENABLED",
+                        "evidenceSource": "manifest",
+                        "rawValue": "android:usesCleartextTraffic=true",
+                        "explanation": "The manifest permits cleartext traffic.",
+                    }
+                ],
+                "limitations": [
+                    "Static absence of UI defensive controls is not runtime proof.",
+                ],
+            }
+        ],
+    }
+
+
 class GenerateReportTest(unittest.TestCase):
     def test_markdown_contains_core_report_sections(self) -> None:
         markdown = render_markdown(export_fixture(), evaluation_fixture())
@@ -252,15 +313,31 @@ class GenerateReportTest(unittest.TestCase):
             }
         )
         scoped = scope_export_to_package(payload, "com.flashlight.cleaner.update")
+        scoped["privacy"] = {
+            "mode": "REDACTED_EXPERT",
+            "redactionApplied": True,
+            "fullInventoryIncluded": False,
+            "packageIdentifierStrategy": "hmac_sha256_alias",
+        }
 
-        markdown = render_markdown(scoped, report_type="app_owner")
+        markdown = render_markdown(
+            scoped,
+            report_type="app_owner",
+            offline_analysis=offline_analysis_fixture(),
+        )
 
         self.assertIn("AURA App Owner Risk & Defensive Surface Report", markdown)
         self.assertIn("Target Application Assessment", markdown)
         self.assertIn("Capability and Component Surface", markdown)
         self.assertIn("Defensive Findings and Remediation", markdown)
+        self.assertIn("Offline APK Analyzer Findings", markdown)
+        self.assertIn("OFFLINE_APK_ANALYZER", markdown)
         self.assertIn("MASVS-PLATFORM", markdown)
+        self.assertIn("MASVS-NETWORK", markdown)
+        self.assertIn("AURA-OFF-001", markdown)
+        self.assertIn("<redacted:apk_path>", markdown)
         self.assertIn("Remediation Checklist", markdown)
+        self.assertNotIn("[open] No user action required", markdown)
         self.assertIn("Retest Comparison", markdown)
         self.assertIn("Report scope: `target_app_only`", markdown)
         self.assertIn("Full device inventory rows included: `no`", markdown)
@@ -284,10 +361,14 @@ class GenerateReportTest(unittest.TestCase):
             current_scoped,
             report_type="app_owner",
             previous_export=previous_scoped,
+            offline_analysis=offline_analysis_fixture("NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED"),
+            previous_offline_analysis=offline_analysis_fixture("CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST"),
         )
 
-        self.assertIn("Fixed finding types: `UNPROTECTED_EXPORTED_COMPONENT`", markdown)
-        self.assertIn("New/regressed finding types: `CLEARTEXT_TRAFFIC_ALLOWED`", markdown)
+        self.assertIn("Fixed on-device finding types: `UNPROTECTED_EXPORTED_COMPONENT`", markdown)
+        self.assertIn("New/regressed on-device finding types: `CLEARTEXT_TRAFFIC_ALLOWED`", markdown)
+        self.assertIn("Fixed offline APK finding types: `CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST`", markdown)
+        self.assertIn("New/regressed offline APK finding types: `NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED`", markdown)
 
 
 if __name__ == "__main__":
