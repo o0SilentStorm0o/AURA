@@ -191,6 +191,25 @@ function renderGroups(audit) {
     .join("");
 }
 
+function llmClass(llm) {
+  if (!llm) return "warn";
+  const validation = llm.validation || {};
+  if (validation.accepted && !validation.fallbackUsed) return "good";
+  if (validation.accepted) return "warn";
+  return "warn";
+}
+
+function llmLabel(llm) {
+  if (!llm) return "Not run";
+  if (llm.source === "rule_based_template_no_review_areas") return "No review areas to summarize";
+  if (llm.source === "local_llm_validated") return "Local LLM validated";
+  if (llm.source === "local_llm_partially_validated") return "Local LLM partial fallback";
+  if (llm.source === "rule_based_template_after_llm_error") return "Template fallback after LLM error";
+  if (llm.source === "rule_based_template_after_invalid_llm") return "Template fallback after invalid LLM";
+  if (llm.source === "rule_based_template") return "Template summary";
+  return llm.source || "Unknown";
+}
+
 function renderResult(payload) {
   state.lastResult = payload;
   const audit = payload.audit || {};
@@ -199,8 +218,8 @@ function renderResult(payload) {
   $("readiness").textContent = release.status || "Unknown";
   renderCounts(audit);
   renderGroups(audit);
-  $("llmStatus").className = `readiness ${payload.llm && payload.llm.source === "local_llm_validated" ? "good" : "warn"}`;
-  $("llmStatus").textContent = payload.llm ? payload.llm.source : "Not run";
+  $("llmStatus").className = `readiness ${llmClass(payload.llm)}`;
+  $("llmStatus").textContent = llmLabel(payload.llm);
   $("llmDetail").textContent = payload.llm && payload.llm.validation
     ? JSON.stringify(payload.llm.validation)
     : "";

@@ -728,6 +728,17 @@ def summarize_audit(
         embed=embed,
         embedding_info=embedding_info,
     )
+    if not audit.get("findingGroups", []):
+        return {
+            **template,
+            "source": "rule_based_template_no_review_areas",
+            "validation": {
+                "accepted": True,
+                "fallbackUsed": False,
+                "errors": [],
+                "reason": "No release-risk finding groups were generated, so there was nothing for the LLM to summarize.",
+            },
+        }
     if llm_mode == "off" or not local_llm_url:
         return template
     if llm_mode == "strict":

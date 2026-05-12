@@ -49,6 +49,19 @@ class LlmSummaryTest(unittest.TestCase):
         self.assertNotIn("AURA grouped", payload["groupSummaries"][0]["customerSummary"])
         self.assertTrue(payload["groupSummaries"][0]["docIds"])
 
+    def test_empty_audit_does_not_report_llm_failure(self) -> None:
+        payload = summarize_audit(
+            {"findingGroups": []},
+            llm_mode="strict",
+            local_llm_url="http://127.0.0.1:1",
+        )
+
+        self.assertEqual("rule_based_template_no_review_areas", payload["source"])
+        self.assertEqual([], payload["groupSummaries"])
+        self.assertTrue(payload["validation"]["accepted"])
+        self.assertFalse(payload["validation"]["fallbackUsed"])
+        self.assertIn("nothing for the LLM to summarize", payload["validation"]["reason"])
+
     def test_validation_rejects_hallucinated_finding_and_doc_ids(self) -> None:
         candidate = {
             "groups": [
