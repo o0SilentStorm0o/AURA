@@ -52,9 +52,13 @@ AURA uses two flavor dimensions:
 - Python evaluator that computes permission-only, capability-only, role-aware,
   role+provenance, temporal, and full AURA baseline metrics outside the Android
   app.
+- App-owner release-risk audit engine that converts AURA/offline analyzer
+  evidence into a CTO-facing release checklist: top fix plan, P1/P2/P3/INFO
+  findings, acceptance criteria, verification checks, owners, and stable retest
+  fingerprints.
 - Report generator for:
   - `device_expert` reports,
-  - `app_owner` reports,
+  - `app_owner` release-risk reports,
   - `public_teaser` outreach reports.
 - Export redaction modes:
   - `full_research`,
@@ -105,6 +109,18 @@ Public teasers are not vulnerability reports. They are target-scoped,
 `redacted_teaser` reports that suppress raw evidence, exact component names,
 full evidence graph details, policy trace detail, source paths, signing values,
 and exact risk-vector values.
+
+Generate an app-owner release-risk report:
+
+```bash
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --report-type app_owner \
+  --target-package com.example.app \
+  --offline-analysis artifacts/scenario_runner/offline-apk-analysis.json \
+  --out-dir artifacts/reports \
+  --basename aura-app-owner-release-risk
+```
 
 See:
 

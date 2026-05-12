@@ -17,6 +17,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "export_redactor"))
 from redact_export import DEFAULT_SALT, FULL_RESEARCH, REDACTED_TEASER, PRIVACY_MODES, redact_export
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app_owner_audit"))
+from audit_engine import build_audit as build_app_owner_audit
+from audit_engine import compare_audits as compare_app_owner_audits
 
 
 REPORT_GENERATOR_VERSION = "0.3.0"
@@ -1043,34 +1046,212 @@ def retest_comparison_section(
     return lines
 
 
-def app_owner_summary_section(
+def release_status_label(status: str) -> str:
+    return {
+        "BLOCKED": "Blocked before release",
+        "NEEDS_FIXES": "Needs fixes before production",
+        "REVIEW_RECOMMENDED": "Review recommended",
+        "PASS": "No release blockers observed",
+    }.get(status, status or "unknown")
+
+
+def release_readiness_section(
     export: dict[str, Any],
     assessment: dict[str, Any],
-    posture: dict[str, Any],
-    findings: list[dict[str, Any]],
+    audit: dict[str, Any],
     episodes: list[dict[str, Any]],
-    offline_apk: dict[str, Any] | None,
 ) -> list[str]:
-    decision = assessment.get("decision", {})
-    if findings:
-        finding_text = f"{len(findings)} defensive finding(s): {top_finding_types(findings, limit=5)}"
-    else:
-        finding_text = "no exported defensive surface findings"
-    offline_text = top_offline_finding_types(offline_apk, limit=5)
+    status = audit.get("releaseStatus", {})
+    counts = audit.get("priorityCounts", {})
     return [
-        "## Executive Summary",
+        "## Release Readiness",
         "",
-        f"- Target app: `{md_escape(title_for_app(assessment))}`",
-        f"- Generated at: `{iso_time(export.get('generatedAt'))}`",
-        f"- Threat decision: `{decision.get('color')}` / {decision.get('title', '')}",
-        f"- Defensive posture: `{posture.get('postureClass', 'NO_OBSERVED_WEAKNESS')}`",
-        f"- On-device defensive findings: `{finding_text}`",
-        f"- Offline APK analyzer findings: `{offline_text}`",
-        f"- Temporal episodes for target: `{len(episodes)}`",
+        f"Release readiness: **{md_escape(release_status_label(status.get('status', 'unknown')))}**.",
         "",
-        "AURA separates whether the app looks like a user-actionable threat from whether the app has defensive implementation weaknesses. A `GREEN` threat decision can still coexist with weak defensive posture.",
+        "| Axis | Result |",
+        "| --- | --- |",
+        f"| Target app | `{md_escape(title_for_app(assessment))}` |",
+        f"| Generated at | `{iso_time(export.get('generatedAt'))}` |",
+        f"| Release status | `{status.get('status', 'unknown')}` |",
+        f"| P1 blocker findings | `{counts.get('P1', 0)}` |",
+        f"| P2 should-fix findings | `{counts.get('P2', 0)}` |",
+        f"| P3 review findings | `{counts.get('P3', 0)}` |",
+        f"| INFO items | `{counts.get('INFO', 0)}` |",
+        f"| Ready for external beta | `{bool_text(status.get('readyForExternalBeta'))}` |",
+        f"| Ready for production | `{bool_text(status.get('readyForProduction'))}` |",
+        f"| Retest recommended | `{bool_text(status.get('retestRecommended'))}` |",
+        f"| Temporal episodes for target | `{len(episodes)}` |",
+        "",
+        f"Reason: {md_escape(status.get('reason', 'No release status reason exported.'))}",
+        "",
+        "For app-owner reports, release-risk findings are the primary output. The runtime threat decision is retained only as secondary context because a non-malicious app can still have release-blocking hardening gaps.",
         "",
     ]
+
+
+def top_fix_action(finding: dict[str, Any]) -> str:
+    finding_type = finding.get("type")
+    title = str(finding.get("title") or "")
+    if finding_type == "DEBUGGABLE_OR_TEST_CONFIG_IN_RELEASE":
+        return "Fix release build configuration"
+    if finding_type == "EXPORTED_COMPONENT_WITHOUT_GUARD":
+        return f"Protect or remove {title.replace('Exported ', '').replace(' without permission guard', '')}"
+    if finding_type == "CLEARTEXT_TRAFFIC_ALLOWED":
+        return "Disable or narrowly scope cleartext traffic"
+    if finding_type == "BACKUP_MAY_INCLUDE_SENSITIVE_DATA":
+        return "Define backup/data extraction policy"
+    if finding_type == "MISSING_TAPJACKING_DEFENSE_ON_SENSITIVE_ACTION":
+        return "Review tapjacking defenses on sensitive screens"
+    if finding_type == "DEEPLINK_ACCEPTS_UNTRUSTED_INPUT":
+        return "Constrain and validate deep link input"
+    if finding_type == "WEBVIEW_RISKY_CONFIGURATION":
+        return "Review WebView configuration"
+    if finding_type == "SECRETS_OR_ENDPOINTS_IN_APK":
+        return "Classify embedded keys/endpoints"
+    return title or str(finding_type or "Review release-risk finding")
+
+
+def top_fix_plan_section(audit: dict[str, Any], limit: int = 8) -> list[str]:
+    findings = audit.get("findings", [])
+    lines = ["## Top Fix Plan", ""]
+    if not findings:
+        return lines + ["No release-risk fix plan was generated from supplied evidence.", ""]
+    seen: set[str] = set()
+    plan: list[str] = []
+    for finding in findings:
+        action = top_fix_action(finding)
+        key = f"{finding.get('priority')}:{action}"
+        if key in seen:
+            continue
+        seen.add(key)
+        plan.append(
+            f"{finding.get('priority')}: {action} "
+            f"({finding.get('owner')}; verify: {finding.get('verificationCheck')})"
+        )
+        if len(plan) >= limit:
+            break
+    lines += [f"{index}. {md_escape(item)}" for index, item in enumerate(plan, start=1)]
+    lines += [""]
+    return lines
+
+
+def audit_finding_rows(findings: list[dict[str, Any]]) -> list[str]:
+    lines = [
+        "| ID | Priority | Finding | Confidence | Owner | Manual review | Evidence |",
+        "| --- | --- | --- | ---: | --- | --- | --- |",
+    ]
+    for finding in findings:
+        evidence = finding.get("evidence") or {}
+        evidence_text = f"{evidence.get('source')} / {evidence.get('sourceFindingType')}: {evidence.get('rawValue') or 'evidence exported'}"
+        lines.append(
+            f"| `{finding.get('id')}` | `{finding.get('priority')}` | {md_escape(finding.get('title'))} | "
+            f"{score(finding.get('confidence'))} | {md_escape(finding.get('owner'))} | "
+            f"`{bool_text(finding.get('requiresManualReview'))}` | {md_escape(evidence_text)} |"
+        )
+    return lines
+
+
+def release_risk_findings_section(audit: dict[str, Any]) -> list[str]:
+    findings = audit.get("findings", [])
+    lines = ["## Release Risk Findings", ""]
+    if not findings:
+        return lines + [
+            "No release-risk findings were generated from the supplied AURA export and offline APK analyzer evidence.",
+            "",
+        ]
+    lines += audit_finding_rows(findings)
+    lines += [""]
+    for finding in findings:
+        lines += [
+            f"### {finding.get('priority')} {md_escape(finding.get('title'))}",
+            "",
+            f"- Finding ID: `{finding.get('id')}`",
+            f"- Type: `{finding.get('type')}`",
+            f"- Fingerprint: `{finding.get('fingerprint')}`",
+            f"- Suggested owner: `{md_escape(finding.get('owner'))}`",
+            f"- Requires manual review: `{bool_text(finding.get('requiresManualReview'))}`",
+            f"- Acceptance criteria: {md_escape(finding.get('acceptanceCriteria'))}",
+            f"- Why it matters: {md_escape(finding.get('whyItMatters'))}",
+            f"- How to fix: {md_escape(finding.get('howToFix'))}",
+            f"- Verification command/check: {md_escape(finding.get('verificationCheck') or finding.get('howToVerify'))}",
+            "",
+        ]
+    return lines
+
+
+def audit_retest_section(
+    current_audit: dict[str, Any],
+    previous_audit: dict[str, Any] | None,
+) -> list[str]:
+    diff = compare_app_owner_audits(previous_audit, current_audit)
+    lines = ["## Release-Risk Retest Diff", ""]
+    if not diff.get("available"):
+        return lines + [
+            "No previous app-owner audit was supplied. Retest diffs use stable release-risk fingerprints when `--previous-export` and matching offline evidence are available.",
+            "",
+        ]
+    lines += [
+        "| Status | Count | Types |",
+        "| --- | ---: | --- |",
+        f"| Fixed | {len(diff.get('fixed', []))} | `{', '.join(item.get('type', '') for item in diff.get('fixed', [])) or 'none'}` |",
+        f"| Remaining | {len(diff.get('remaining', []))} | `{', '.join(item.get('type', '') for item in diff.get('remaining', [])) or 'none'}` |",
+        f"| New/regressed | {len(diff.get('new', []))} | `{', '.join(item.get('type', '') for item in diff.get('new', [])) or 'none'}` |",
+        "",
+    ]
+    return lines
+
+
+def runtime_abuse_context_section(
+    assessment: dict[str, Any],
+    posture: dict[str, Any],
+) -> list[str]:
+    decision = assessment.get("decision", {})
+    role = assessment.get("role", {})
+    provenance = assessment.get("provenance", {})
+    return [
+        "## Runtime Abuse Context",
+        "",
+        "This section is secondary in app-owner mode. It answers whether AURA observed user/device abuse evidence, not whether the release artifact is ready.",
+        "",
+        "| Axis | Value |",
+        "| --- | --- |",
+        f"| Threat behavior decision | `{decision.get('color', 'unknown')}` / {md_escape(decision.get('title', ''))} |",
+        f"| Defensive posture class | `{posture.get('postureClass', 'NO_OBSERVED_WEAKNESS')}` |",
+        f"| Inferred role | `{role.get('predicted', 'unknown')}` / confidence `{score(role.get('confidence'))}` |",
+        f"| Provenance class | `{provenance.get('provenanceClass', 'unknown')}` |",
+        f"| Actionability class | `{decision.get('actionabilityClass', 'unknown')}` |",
+        "",
+        "A `GREEN` threat behavior decision is not a release-readiness pass. Release risk is determined by the findings above.",
+        "",
+    ]
+
+
+def app_owner_reproducibility_summary(export: dict[str, Any], audit: dict[str, Any], offline_apk: dict[str, Any] | None) -> list[str]:
+    snapshot = first_snapshot(export)
+    return [
+        "### Reproducibility",
+        "",
+        f"- Export schema version: `{export.get('schemaVersion')}`",
+        f"- Report generator version: `{REPORT_GENERATOR_VERSION}`",
+        f"- App-owner audit engine version: `{audit.get('auditEngineVersion', 'unknown')}`",
+        f"- Offline APK analyzer version: `{(offline_apk or {}).get('analyzerVersion', 'not supplied')}`",
+        f"- Collector version: `{snapshot.get('collectorVersion', 'unknown')}`",
+        f"- Scan ID: `{export.get('scanId', 'unknown')}`",
+        f"- Generated at: `{iso_time(export.get('generatedAt'))}`",
+        "",
+    ]
+
+
+def demote_section(lines: list[str]) -> list[str]:
+    output: list[str] = []
+    for line in lines:
+        if line.startswith("### "):
+            output.append(f"**{line[4:]}**")
+        elif line.startswith("## "):
+            output.append(f"### {line[3:]}")
+        else:
+            output.append(line)
+    return output
 
 
 def app_owner_scope_section(export: dict[str, Any], assessment: dict[str, Any]) -> list[str]:
@@ -1081,7 +1262,7 @@ def app_owner_scope_section(export: dict[str, Any], assessment: dict[str, Any]) 
         "",
         "| Field | Value |",
         "| --- | --- |",
-        "| Report type | App owner / developer defensive surface report |",
+        "| Report type | App owner / developer release-risk report |",
         f"| Target package | `{snapshot.get('packageName', 'unknown')}` |",
         f"| Target label | `{snapshot.get('appLabel', 'unknown')}` |",
         f"| Version | `{snapshot.get('versionName', 'unknown')}` / `{snapshot.get('versionCode', 'unknown')}` |",
@@ -1118,26 +1299,26 @@ def render_app_owner_markdown(
         previous_offline_analysis,
         (previous_export or {}).get("reportScope", {}).get("targetPackage", previous_package),
     )
+    current_audit = build_app_owner_audit(export, offline_analysis=offline_analysis)
+    previous_audit = (
+        build_app_owner_audit(previous_export, offline_analysis=previous_offline_analysis)
+        if previous_export is not None
+        else None
+    )
     lines = [
-        "# AURA App Owner Risk & Defensive Surface Report",
+        "# AURA App Owner Release Risk Report",
         "",
         f"Generated from scan `{export.get('scanId', 'unknown')}`.",
         "",
     ]
-    lines += app_owner_summary_section(export, assessment, posture, findings, package_episodes, current_offline_apk)
+    lines += release_readiness_section(export, assessment, current_audit, package_episodes)
+    lines += top_fix_plan_section(current_audit)
+    lines += release_risk_findings_section(current_audit)
+    lines += audit_retest_section(current_audit, previous_audit)
     lines += [
-        "## Overall Conclusion",
+        "## Scope and Methodology",
         "",
-        f"The target app received threat decision `{assessment.get('decision', {}).get('color')}` and defensive posture `{posture.get('postureClass', 'NO_OBSERVED_WEAKNESS')}`.",
-        "",
-        "For app-owner use, prioritize fixing defensive findings and then retest. Threat decisions describe observed abuse/actionability context; defensive posture describes hardening and exposed surface.",
-        "",
-    ]
-    lines += app_owner_scope_section(export, assessment)
-    lines += [
-        "## Methodology",
-        "",
-        "This app-owner report focuses on one target APK/app context. It does not try to certify that the app is malware-free. It explains role/provenance/capability evidence, defensive posture, observability limits, and concrete remediation work.",
+        "This app-owner report focuses on release readiness for one target APK/app context. It does not try to certify that the app is malware-free. It converts AURA and offline APK evidence into release-risk findings with priority, evidence, remediation, verification, owner, and stable retest fingerprints.",
         "",
         "MASVS/MASTG mappings are broad review areas, not a claim that AURA is a complete OWASP MASVS scanner.",
         "",
@@ -1145,35 +1326,25 @@ def render_app_owner_markdown(
         "",
     ]
     lines += privacy_lines(export)
-    lines += ["## Target Application Assessment", ""]
-    lines += app_detail_section(
-        assessment,
-        posture,
-        findings,
-        package_episodes,
-        "AURA-TARGET-001",
-    )
-    lines += capability_surface_section(assessment)
-    lines += defensive_findings_section(findings)
-    lines += offline_apk_analyzer_section(current_offline_apk, export)
-    lines += remediation_checklist_section(assessment, findings, current_offline_apk)
-    lines += retest_comparison_section(export, previous_export, current_offline_apk, previous_offline_apk)
     lines += [
-        "## Observability Limits",
+        "## Technical Appendix",
+        "",
+        "The release-risk list above is canonical for app-owner delivery. The sections below preserve supporting context for review and reproducibility; they should not be copied into tickets unless needed.",
+        "",
+    ]
+    lines += demote_section(app_owner_scope_section(export, assessment))
+    lines += demote_section(capability_surface_section(assessment))
+    lines += demote_section(offline_apk_analyzer_section(current_offline_apk, export))
+    lines += demote_section(runtime_abuse_context_section(assessment, posture))
+    lines += [
+        "### Observability Limits",
         "",
         "- On-device AURA observes manifest/component metadata and best-effort cleartext/debuggable/backup indicators where Android exposes them.",
         "- Detailed `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, and `accessibilityDataSensitive` checks belong to the offline APK analyzer or source review.",
         "- Defensive findings are app-hardening signals, not malware verdicts.",
         "",
     ]
-    lines += reproducibility_section(export)
-    lines += [
-        "## Technical Appendix",
-        "",
-        "- The JSON export remains the source of truth for raw features, evidence IDs, decision trace, and retest comparison.",
-        "- HTML output escapes app-provided strings and includes a restrictive Content-Security-Policy meta tag.",
-        "",
-    ]
+    lines += app_owner_reproducibility_summary(export, current_audit, current_offline_apk)
     return "\n".join(lines)
 
 
@@ -1357,9 +1528,10 @@ def teaser_full_report_section() -> list[str]:
         "",
         "With explicit authorization and preferably a supplied test build, a full AURA report can add:",
         "",
+        "- App-owner release readiness with P1/P2/P3/INFO findings and stable retest fingerprints.",
         "- Component-level evidence with exact manifest entries and exported component review.",
         "- Offline APK analyzer evidence for `network_security_config`, defensive UI patterns, and static code/layout heuristics.",
-        "- Full evidence graph, decision trace, counterfactual remediation, and retest comparison.",
+        "- Full evidence graph, decision trace, counterfactual remediation, and release-risk retest comparison.",
         "- Concrete remediation checklist with finding IDs, owner-friendly status tracking, and before/after diffs.",
         "- JSON appendix suitable for reproducibility, expert review, and policy replay.",
         "",
@@ -1751,17 +1923,26 @@ def markdown_to_html(markdown_text: str) -> str:
 def inline_html(text: str) -> str:
     escaped = escape(text)
     escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+    escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
     return escaped
 
 
+def html_title(markdown_text: str) -> str:
+    for line in markdown_text.splitlines():
+        if line.startswith("# "):
+            return line[2:].strip() or "AURA Report"
+    return "AURA Report"
+
+
 def render_html(markdown_text: str) -> str:
+    title = escape(html_title(markdown_text))
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AURA Android App Risk Report</title>
+  <title>{title}</title>
   <style>
     :root {{
       --ink: #14211f;

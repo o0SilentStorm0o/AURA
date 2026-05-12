@@ -1,14 +1,15 @@
 # AURA Report Workflow
 
 AURA should not be sold first as a consumer antivirus app. The near-term
-commercial artifact is an evidence-backed Android App Risk and Defensive
-Surface report.
+commercial artifact is an evidence-backed Android App Owner Release Risk
+report. For developer/customer delivery, threat decision is secondary context;
+release-risk findings are the product.
 
 ## Report Offer
 
 Suggested first offer:
 
-- Android App Risk & Defensive Surface Report
+- Android App Owner Release Risk Report
 - fixed scope for one APK or one controlled device export
 - PDF/HTML report plus JSON appendix
 - privacy mode selected for the audience:
@@ -21,6 +22,50 @@ The report is not a malware guarantee and not a replacement for a full mobile
 pentest. It is a no-root, role-normalized, provenance-aware triage and
 explainability layer.
 
+## App-Owner Output Contract
+
+The app-owner report should answer:
+
+```text
+What should this Android team fix or manually verify before release?
+```
+
+It should not lead with:
+
+```text
+Threat decision: GREEN
+```
+
+It should lead with:
+
+```text
+Release readiness: BLOCKED / NEEDS_FIXES / REVIEW_RECOMMENDED / PASS
+P1 blocker findings: N
+P2 should-fix findings: N
+P3 review findings: N
+Retest recommended: yes/no
+```
+
+Each release-risk finding includes:
+
+- stable `id` and `fingerprint`,
+- type and title,
+- priority: `P1`, `P2`, `P3`, or `INFO`,
+- confidence,
+- evidence source,
+- acceptance criteria,
+- why it matters,
+- how to fix,
+- verification command/check,
+- suggested owner,
+- whether manual review is required.
+
+The app-owner report must have one canonical task list: `Release Risk
+Findings`. Older AURA surfaces such as device threat decision, defensive posture
+summaries, offline analyzer rows, policy versions, and raw observability detail
+belong in the technical appendix. They must not become a second competing
+checklist for the customer.
+
 ## Required Inputs
 
 - APK or AURA device export
@@ -30,16 +75,15 @@ explainability layer.
 
 ## Output Sections
 
-- executive summary
+- release readiness
+- top fix plan
+- release-risk findings
+- release-risk retest diff
 - methodology and privacy stance
-- threat decision overview
-- baseline comparison
+- technical appendix with runtime abuse context as secondary context
 - report privacy mode and export-sharing warning
-- priority app findings
-- defensive posture highlights
-- temporal episodes
-- observability limits
-- appendix metadata
+- technical appendix with capability/component surface summary, offline APK
+  analyzer evidence, observability limits, and concise reproducibility metadata
 
 ## Public-Surface Teaser
 

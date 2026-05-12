@@ -24,6 +24,11 @@ This document separates what exists in the current Research MVP from planned wor
 - Separate defensive-posture summaries so threat decisions stay distinct from
   defensive-surface weakness findings.
 - Offline APK analyzer for detailed defensive-surface heuristics: `network_security_config`, `FLAG_SECURE`, `filterTouchesWhenObscured`, `accessibilityDataSensitive`, and manifest component metadata, all with confidence and observability state.
+- Offline APK analyzer now also emits app-owner release-risk evidence for
+  BROWSABLE deep links/app links, backup/data-extraction rules, network security
+  config debug overrides/user CA trust, WebView static patterns, target SDK
+  policy risk, embedded secret/config review, and third-party SDK privacy
+  surface. These are static audit signals, not exploit proof.
 - Opt-in UsageStats foreground correlation for the `SPECIAL_ACCESS_PLUS_SENSITIVE_APP` temporal episode in `researchFull`; this uses only package-level foreground events or aggregated UsageStats fallback, not screen, notification, or network content. The export records the signal source in `foregroundSensitiveAppSignalSource`.
 - Role, permission harm, known package, OEM pattern, F-Droid signature, provenance,
   and decision-policy assets are split under `app/src/main/assets/aura/`; the
@@ -41,6 +46,10 @@ This document separates what exists in the current Research MVP from planned wor
   explicitly reviewed.
 - Report generator that turns AURA JSON exports and optional evaluator output
   into Markdown plus print-ready HTML Android App Risk reports.
+- App-owner audit engine that converts on-device and offline APK findings into
+  release-risk findings with P1/P2/P3/INFO priority, evidence, remediation,
+  verification, suggested owner, manual-review flag, and stable retest
+  fingerprints.
 - Export privacy redactor with `full_research`, `redacted_expert`,
   `redacted_teaser`, and `minimal_support` modes; report generation can now
   render from a privacy processed export and optionally save that redacted JSON

@@ -1,7 +1,9 @@
 # AURA Report Generator
 
-This tool turns an AURA scan export into a customer-readable Android App Risk
-and Defensive Surface report.
+This tool turns an AURA scan export into customer-readable reports. The
+app-owner report is now release-risk first: it leads with P1/P2/P3/INFO
+findings, a top fix plan, acceptance criteria, verification checks, owners, and
+retest fingerprints. Runtime threat decision remains technical appendix context.
 
 It intentionally has no heavy runtime dependency. It writes:
 
@@ -22,8 +24,8 @@ Device/expert report is the default. It summarizes the visible inventory,
 priority RED/YELLOW/BLUE items, grouped GRAY abstentions, defensive posture
 highlights, temporal episodes, baseline comparison, and observability limits.
 
-App-owner report mode focuses the report on one package and removes the rest of
-the device inventory from the report surface:
+App-owner report mode focuses the report on one package, removes the rest of
+the device inventory from the report surface, and builds a release-risk audit:
 
 ```bash
 python3 tools/report_generator/generate_report.py \
@@ -120,12 +122,18 @@ The report separates:
 App-owner reports additionally include:
 
 - target-app scope and environment,
-- capability/component surface summary,
-- defensive finding IDs (`AURA-DEF-###`),
-- broad OWASP MASVS/MASTG review-area mapping,
-- offline APK analyzer findings with `OFFLINE_APK_ANALYZER` source labels,
-- remediation checklist with workflow status markers,
-- optional before/after retest comparison.
+- release readiness: `BLOCKED`, `NEEDS_FIXES`, `REVIEW_RECOMMENDED`, or `PASS`,
+- top fix plan suitable for a CTO/release owner,
+- release-risk findings with `P1`, `P2`, `P3`, and `INFO` priorities,
+- stable finding fingerprints for retest comparison,
+- acceptance criteria, remediation, verification check, owner, and
+  manual-review guidance,
+- release-risk retest diff.
+
+The release-risk findings are the canonical customer task list. Supporting
+runtime abuse context, capability/component summaries, offline analyzer rows,
+observability limits, and reproducibility metadata are kept in the technical
+appendix so they do not compete with the customer-facing fix plan.
 
 HTML output is generated without JavaScript, escapes app-provided strings, and
 includes a restrictive Content-Security-Policy meta tag. This matters because

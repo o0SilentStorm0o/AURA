@@ -234,11 +234,13 @@ class GenerateReportTest(unittest.TestCase):
         self.assertIn("Observability Limits", markdown)
 
     def test_html_is_print_ready_and_escapes_content(self) -> None:
-        html = render_html("# Title\n\n- value with <tag>\n")
+        html = render_html("# Title\n\nRelease readiness: **Blocked before release**.\n\n- value with <tag>\n")
 
         self.assertIn("<!doctype html>", html)
         self.assertIn("Content-Security-Policy", html)
+        self.assertIn("<title>Title</title>", html)
         self.assertIn("@media print", html)
+        self.assertIn("<strong>Blocked before release</strong>", html)
         self.assertIn("&lt;tag&gt;", html)
 
     def test_html_escapes_attacker_controlled_app_strings(self) -> None:
@@ -326,19 +328,29 @@ class GenerateReportTest(unittest.TestCase):
             offline_analysis=offline_analysis_fixture(),
         )
 
-        self.assertIn("AURA App Owner Risk & Defensive Surface Report", markdown)
-        self.assertIn("Target Application Assessment", markdown)
+        self.assertIn("AURA App Owner Release Risk Report", markdown)
+        self.assertIn("Release Readiness", markdown)
+        self.assertIn("Top Fix Plan", markdown)
+        self.assertIn("Release Risk Findings", markdown)
+        self.assertIn("Blocked before release", markdown)
+        self.assertIn("P1", markdown)
+        self.assertIn("EXPORTED_COMPONENT_WITHOUT_GUARD", markdown)
+        self.assertIn("Release-Risk Retest Diff", markdown)
+        self.assertIn("Acceptance criteria", markdown)
+        self.assertIn("Verification command/check", markdown)
+        self.assertIn("Suggested owner", markdown)
         self.assertIn("Capability and Component Surface", markdown)
-        self.assertIn("Defensive Findings and Remediation", markdown)
         self.assertIn("Offline APK Analyzer Findings", markdown)
         self.assertIn("OFFLINE_APK_ANALYZER", markdown)
-        self.assertIn("MASVS-PLATFORM", markdown)
         self.assertIn("MASVS-NETWORK", markdown)
         self.assertIn("AURA-OFF-001", markdown)
         self.assertIn("<redacted:apk_path>", markdown)
-        self.assertIn("Remediation Checklist", markdown)
+        self.assertIn("Runtime Abuse Context", markdown)
+        self.assertIn("The release-risk list above is canonical", markdown)
+        self.assertNotIn("Legacy Defensive Finding Appendix", markdown)
+        self.assertNotIn("## Remediation Checklist", markdown)
         self.assertNotIn("[open] No user action required", markdown)
-        self.assertIn("Retest Comparison", markdown)
+        self.assertNotIn("## Retest Comparison", markdown)
         self.assertIn("Report scope: `target_app_only`", markdown)
         self.assertIn("Full device inventory rows included: `no`", markdown)
         self.assertNotIn("com.example.camera", markdown)
@@ -365,10 +377,9 @@ class GenerateReportTest(unittest.TestCase):
             previous_offline_analysis=offline_analysis_fixture("CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST"),
         )
 
-        self.assertIn("Fixed on-device finding types: `UNPROTECTED_EXPORTED_COMPONENT`", markdown)
-        self.assertIn("New/regressed on-device finding types: `CLEARTEXT_TRAFFIC_ALLOWED`", markdown)
-        self.assertIn("Fixed offline APK finding types: `CLEARTEXT_TRAFFIC_ALLOWED_MANIFEST`", markdown)
-        self.assertIn("New/regressed offline APK finding types: `NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED`", markdown)
+        self.assertIn("| Fixed | 1 | `EXPORTED_COMPONENT_WITHOUT_GUARD` |", markdown)
+        self.assertIn("| Remaining | 1 | `CLEARTEXT_TRAFFIC_ALLOWED` |", markdown)
+        self.assertIn("| New/regressed | 0 | `none` |", markdown)
 
     def test_public_teaser_suppresses_raw_detail_and_sets_scope(self) -> None:
         scoped = scope_export_to_package(export_fixture(), "com.flashlight.cleaner.update")
