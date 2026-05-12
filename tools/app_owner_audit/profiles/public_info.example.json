@@ -1,0 +1,13 @@
+{
+  "appCategory": "public_info",
+  "dataSensitivity": "low",
+  "releaseStage": "production_candidate",
+  "distribution": "google_play",
+  "authFlow": false,
+  "payments": false,
+  "webviewUsageExpected": true,
+  "externalIntegrationsExpected": true,
+  "allowedCleartextDomains": [],
+  "knownExportedComponents": [],
+  "acceptedRisks": []
+}

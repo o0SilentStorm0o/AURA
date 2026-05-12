@@ -1,0 +1,61 @@
+{
+  "policyPackId": "public_info_policy",
+  "version": "0.1.0",
+  "description": "Context rules for public information, media, news, and low-sensitivity content apps.",
+  "rules": [
+    {
+      "ruleId": "public_info_exported_provider_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "provider"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For public-info apps, an unguarded exported provider usually needs a fix or explicit public API justification, but is not automatically escalated as a high-sensitivity data blocker."
+      }
+    },
+    {
+      "ruleId": "public_info_exported_service_receiver_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For lower-sensitivity public-info apps, exported service/receiver surfaces are review items unless they handle auth, payment, or private user data."
+      }
+    },
+    {
+      "ruleId": "public_info_backup_review",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For public-info apps, backup is usually not a blocker unless login, private user data, or tokens are in scope."
+      }
+    },
+    {
+      "ruleId": "public_info_sdk_info",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "INFO",
+        "status": "INFO",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "SDKs are shown as privacy/disclosure context for this lower-sensitivity profile."
+      }
+    }
+  ]
+}

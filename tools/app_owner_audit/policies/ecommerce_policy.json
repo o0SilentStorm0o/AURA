@@ -1,0 +1,48 @@
+{
+  "policyPackId": "ecommerce_policy",
+  "version": "0.1.0",
+  "description": "Context rules for ecommerce, marketplace, ordering, and social commerce apps.",
+  "rules": [
+    {
+      "ruleId": "ecommerce_exported_payment_auth_activity_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "activity",
+        "rawContains": ["auth", "payment", "checkout", "redirect", "callback", "webview", "link"]
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For ecommerce/marketplace apps, exported auth/payment/link activities are expected integration surfaces, but they need narrow filters, state validation, and redirect/input review before production."
+      }
+    },
+    {
+      "ruleId": "ecommerce_deeplink_review",
+      "when": {
+        "evidenceType": "DEEPLINK_ACCEPTS_UNTRUSTED_INPUT"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Deep links are common in ecommerce, but product, payment, referral, and auth parameters need validation before release."
+      }
+    },
+    {
+      "ruleId": "ecommerce_sdk_privacy_review",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Ecommerce apps often include analytics/marketing SDKs; confirm consent, disclosures, and data-safety statements."
+      }
+    }
+  ]
+}

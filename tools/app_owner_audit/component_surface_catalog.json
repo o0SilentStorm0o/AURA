@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "description": "Rule-based catalog for turning exported Android component names into app-owner review areas. It is intentionally conservative: classification explains review context, not exploitability.",
+  "rules": [
+    {
+      "catalogId": "stripe_payment_redirect",
+      "matchAny": ["stripe", "financialconnections", "linkredirect", "paymentreturn"],
+      "componentClass": "PAYMENT_REDIRECT",
+      "groupId": "PAYMENT_REDIRECT_SURFACE_REVIEW",
+      "groupTitle": "Payment / financial redirect surfaces need review",
+      "sdk": "Stripe",
+      "recommendedReview": [
+        "Confirm URI scheme, host, and path constraints for payment/auth return flows.",
+        "Confirm state/nonce validation before accepting callback results.",
+        "Confirm SDK configuration matches the production package name and signing certificate."
+      ]
+    },
+    {
+      "catalogId": "payment_or_checkout_entrypoint",
+      "matchAny": ["payment", "checkout", "billing", "wallet", "paywall"],
+      "componentClass": "PAYMENT_REDIRECT",
+      "groupId": "PAYMENT_REDIRECT_SURFACE_REVIEW",
+      "groupTitle": "Payment and checkout entry points need review",
+      "recommendedReview": [
+        "Confirm the externally reachable payment entry point validates caller, state, and expected route.",
+        "Confirm payment completion cannot be spoofed by arbitrary intent extras or deep-link parameters."
+      ]
+    },
+    {
+      "catalogId": "auth_callback_entrypoint",
+      "matchAny": ["auth", "oauth", "login", "callback", "redirect", "signin", "sso"],
+      "componentClass": "AUTH_CALLBACK",
+      "groupId": "AUTH_CALLBACK_SURFACE_REVIEW",
+      "groupTitle": "Authentication callback surfaces need review",
+      "recommendedReview": [
+        "Confirm callback routes validate state/nonce and reject unexpected callers.",
+        "Confirm token, code, and redirect parameters are not accepted without server-side validation."
+      ]
+    },
+    {
+      "catalogId": "deep_link_router",
+      "matchAny": ["deeplink", "deep_link", "router", "routing", "linkresolver", "linkdispatcher", "navigation"],
+      "componentClass": "DEEPLINK_ROUTER",
+      "groupId": "DEEPLINK_ROUTING_ENTRYPOINT_REVIEW",
+      "groupTitle": "Deep link / routing entry points need review",
+      "recommendedReview": [
+        "Confirm accepted schemes, hosts, paths, and parameters are constrained.",
+        "Confirm routing code rejects unexpected destinations and sensitive actions without fresh authorization."
+      ]
+    },
+    {
+      "catalogId": "webview_browser_entrypoint",
+      "matchAny": ["webview", "browser", "chrometab", "customtab", "custom_tab", "chrome"],
+      "componentClass": "WEBVIEW_ENTRYPOINT",
+      "groupId": "WEBVIEW_BROWSER_ENTRYPOINT_REVIEW",
+      "groupTitle": "WebView / browser entry points need review",
+      "recommendedReview": [
+        "Confirm URL loading is restricted to expected origins.",
+        "Confirm external URLs cannot reach privileged WebView settings or JavaScript bridges."
+      ]
+    },
+    {
+      "catalogId": "preview_or_tooling_surface",
+      "matchAny": ["preview", "playground", "tooling", "debug", "sample", "demo", "tagmanagerpreview"],
+      "componentClass": "PREVIEW_OR_TOOLING",
+      "groupId": "PREVIEW_TOOLING_RELEASE_REVIEW",
+      "groupTitle": "Preview/tooling components in release artifact need review",
+      "recommendedReview": [
+        "Confirm the component is intentionally shipped in the production artifact.",
+        "Remove preview/debug tooling from release builds or protect it behind an explicit guard."
+      ]
+    },
+    {
+      "catalogId": "facebook_sdk_surface",
+      "matchAny": ["com.facebook", "facebook"],
+      "componentClass": "SDK_CALLBACK",
+      "groupId": "THIRD_PARTY_SDK_EXPORTED_SURFACES",
+      "groupTitle": "Third-party SDK exported surfaces need review",
+      "sdk": "Facebook",
+      "recommendedReview": [
+        "Confirm SDK callbacks are expected for the app profile and release channel.",
+        "Confirm SDK configuration and privacy disclosures match enabled SDK behavior."
+      ]
+    },
+    {
+      "catalogId": "google_analytics_tagmanager_surface",
+      "matchAny": ["tagmanager", "analytics", "firebase", "measurement", "installreferrer"],
+      "componentClass": "ANALYTICS_RECEIVER",
+      "groupId": "THIRD_PARTY_SDK_EXPORTED_SURFACES",
+      "groupTitle": "Third-party SDK exported surfaces need review",
+      "sdk": "Google/Firebase",
+      "recommendedReview": [
+        "Confirm analytics/referrer receivers are expected and documented in privacy disclosures.",
+        "Confirm release configuration disables debug or preview-only analytics endpoints."
+      ]
+    },
+    {
+      "catalogId": "huawei_hms_surface",
+      "matchAny": ["huawei", "hms", "push", "msgservice"],
+      "componentClass": "PUSH_SERVICE",
+      "groupId": "THIRD_PARTY_SDK_EXPORTED_SURFACES",
+      "groupTitle": "Third-party SDK exported surfaces need review",
+      "sdk": "Huawei HMS",
+      "recommendedReview": [
+        "Confirm push/service callbacks are expected for distributed markets.",
+        "Confirm message handling validates payload type and does not trigger sensitive actions directly."
+      ]
+    },
+    {
+      "catalogId": "sendbird_surface",
+      "matchAny": ["sendbird"],
+      "componentClass": "SDK_CALLBACK",
+      "groupId": "THIRD_PARTY_SDK_EXPORTED_SURFACES",
+      "groupTitle": "Third-party SDK exported surfaces need review",
+      "sdk": "Sendbird",
+      "recommendedReview": [
+        "Confirm chat/messaging SDK surfaces are expected for this app profile.",
+        "Confirm privacy disclosures and notification/message handling expectations are documented."
+      ]
+    },
+    {
+      "catalogId": "ravelin_surface",
+      "matchAny": ["ravelin"],
+      "componentClass": "SDK_CALLBACK",
+      "groupId": "THIRD_PARTY_SDK_EXPORTED_SURFACES",
+      "groupTitle": "Third-party SDK exported surfaces need review",
+      "sdk": "Ravelin",
+      "recommendedReview": [
+        "Confirm fraud/risk SDK surfaces are expected and covered by the customer privacy story.",
+        "Confirm SDK identifiers and callbacks do not expose app-owned sensitive flows."
+      ]
+    },
+    {
+      "catalogId": "customer_data_flow_entrypoint",
+      "matchAny": ["customer", "account", "profile", "address", "orders", "delivery"],
+      "componentClass": "CUSTOMER_DATA_FLOW",
+      "groupId": "CUSTOMER_DATA_FLOW_ENTRYPOINT_REVIEW",
+      "groupTitle": "Customer-data flow entry points need review",
+      "recommendedReview": [
+        "Confirm externally reachable customer-data routes require the expected authenticated state.",
+        "Confirm inbound parameters cannot bypass normal navigation or authorization checks."
+      ]
+    }
+  ],
+  "defaults": {
+    "componentClass": "UNKNOWN_EXPORTED_SURFACE",
+    "groupId": "COMPONENT_EXPOSURE_REVIEW",
+    "groupTitle": "Other exported surfaces need review",
+    "recommendedReview": [
+      "Confirm the component is intentionally reachable from other apps.",
+      "Confirm manifest permission guards, caller validation, and input validation are sufficient."
+    ]
+  }
+}

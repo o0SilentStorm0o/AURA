@@ -1,0 +1,62 @@
+{
+  "policyPackId": "health_policy",
+  "version": "0.1.0",
+  "description": "Context rules for health and medical apps.",
+  "rules": [
+    {
+      "ruleId": "health_exported_service_receiver_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Health apps can have legitimate integration entry points, but unguarded exported services or receivers should be fixed or reviewed before release."
+      }
+    },
+    {
+      "ruleId": "health_cleartext_high_sensitivity_blocker",
+      "when": {
+        "evidenceType": "CLEARTEXT_TRAFFIC_ALLOWED",
+        "dataSensitivity": ["high", "regulated"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": false,
+        "appProfileImpact": "For high-sensitivity health apps, broad cleartext allowance is a release blocker unless explicitly scoped and accepted."
+      }
+    },
+    {
+      "ruleId": "health_backup_should_fix_or_block_regulated",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA",
+        "dataSensitivity": ["high", "regulated"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Health apps with high or regulated data sensitivity should not ship with ambiguous backup/data extraction behavior."
+      }
+    },
+    {
+      "ruleId": "health_sensitive_ui_review",
+      "when": {
+        "evidenceType": "SENSITIVE_SCREEN_NOT_PROTECTED"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Health screens may display sensitive user data; absence of screen protection is promoted to should-fix/manual review."
+      }
+    }
+  ]
+}

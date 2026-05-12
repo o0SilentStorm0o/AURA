@@ -47,17 +47,38 @@ This document separates what exists in the current Research MVP from planned wor
 - Report generator that turns AURA JSON exports and optional evaluator output
   into Markdown plus print-ready HTML Android App Risk reports.
 - App-owner audit engine that converts on-device and offline APK findings into
-  release-risk findings with P1/P2/P3/INFO priority, evidence, remediation,
-  verification, suggested owner, manual-review flag, and stable retest
-  fingerprints.
+  policy-driven release-risk findings with app/customer profile, applied policy
+  ladder, additive customer policy packs, P1/P2/P3/INFO priority, finding
+  status, evidence, app-profile impact, remediation, acceptance criteria,
+  verification check, suggested owner, manual-review flag, accepted-risk /
+  not-applicable handling, policy-quality metrics, and stable retest
+  fingerprints. It now classifies component surfaces into payment/account,
+  routing/WebView, preview/tooling, SDK/privacy, and other review areas with
+  group-level acceptance criteria, verification checks, and evidence-strength
+  caveats. Built-in profile examples and policy packs cover base Android
+  release posture, fintech, health, ecommerce, public-info, internal enterprise,
+  SDK/library, debug builds, and production release candidates.
+- Optional host-side LLM/RAG summary layer for app-owner finding groups. The
+  supported local runtime is native macOS Ollama with Metal acceleration using
+  `qwen2.5:3b`, Ollama `nomic-embed-text` embeddings, and local Qdrant
+  retrieval. The LLM layer is validated and copy-linted; it cannot create
+  findings, change policy severity, add evidence, or bypass deterministic
+  fallback templates.
 - Export privacy redactor with `full_research`, `redacted_expert`,
   `redacted_teaser`, and `minimal_support` modes; report generation can now
-  render from a privacy processed export and optionally save that redacted JSON
-  artifact.
+  evaluate app-owner audit semantics from the internal target-scoped export
+  before rendering a privacy-processed report, preserving grouping quality while
+  keeping shared report identifiers and component details redacted. The
+  generator can optionally save the redacted JSON artifact.
 - Public-surface demo workflow under `tools/public_demo/` for non-invasive
   Google Play teaser reports. The current first-wave target list is
   Gastromapa, Bikeflip, Bistro.sk, and iSnemovna; unsupported or abandoned
   targets such as Dudelo are intentionally not kept in the active list.
+- Real-world validation harness under `tools/real_world_validation/` that
+  regenerates app-owner reports for public-app targets, classifies findings as
+  valuable/context-dependent/noisy, flags manual-review-heavy output, and
+  records whether a target is a strong teaser candidate, negative control, or
+  stress case.
 - Explainability UI v1 with Basic, Power, and Research modes; action-first
   dashboard; selectable app detail; user risk story; observed/not-observed
   sections; recommended actions; scan-change summary; temporal episodes;
@@ -68,6 +89,9 @@ This document separates what exists in the current Research MVP from planned wor
 - Real-public-app teaser generation has been exercised on a Google Play
   emulator with AURA scan export, logcat capture, target-scoped
   `redacted_teaser` exports, and print-ready HTML reports.
+- Native Ollama/Qdrant LLM/RAG report wording has been smoke-tested on Bikeflip
+  and Bistro app-owner audits. `qwen2.5:3b` validated successfully; smaller
+  local models were faster but failed strict schema validation in this use case.
 
 ## Not Yet Implemented
 
@@ -75,6 +99,8 @@ This document separates what exists in the current Research MVP from planned wor
 - Automated user action launchers for settings/remediation; current UI explains
   actions but does not deep-link into Android settings screens.
 - Automated PDF rendering beyond browser print/save-as-PDF from generated HTML.
+- Local AURA Studio UI for non-CLI report orchestration; current host-side
+  workflow is scriptable but still command-line driven.
 - Automated Play Store installation/download orchestration for public demos;
   the current workflow opens Play Store targets and expects manual install with
   a test Google account.

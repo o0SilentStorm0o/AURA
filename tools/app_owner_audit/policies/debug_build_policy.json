@@ -1,0 +1,34 @@
+{
+  "policyPackId": "debug_build_policy",
+  "version": "0.1.0",
+  "description": "Rules for internal debug/development builds where selected release gates become context.",
+  "rules": [
+    {
+      "ruleId": "debuggable_expected_in_debug_build",
+      "when": {
+        "evidenceType": "DEBUGGABLE_OR_TEST_CONFIG_IN_RELEASE",
+        "releaseStage": ["debug", "development", "internal_debug"]
+      },
+      "effect": {
+        "priority": "INFO",
+        "status": "INFO",
+        "owner": "Build/release owner",
+        "manualReviewRequired": false,
+        "appProfileImpact": "The app profile marks this as a debug/development build, so debuggable config is context rather than a release blocker."
+      }
+    },
+    {
+      "ruleId": "debug_cleartext_review_only",
+      "when": {
+        "evidenceType": "CLEARTEXT_TRAFFIC_ALLOWED",
+        "releaseStage": ["debug", "development", "internal_debug"]
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "appProfileImpact": "Cleartext may be acceptable in an internal debug build, but the production variant should be retested."
+      }
+    }
+  ]
+}

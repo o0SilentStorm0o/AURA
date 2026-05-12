@@ -1,0 +1,78 @@
+{
+  "policyPackId": "fintech_policy",
+  "version": "0.1.0",
+  "description": "Context rules for banking, payments, investment, and personal finance apps.",
+  "rules": [
+    {
+      "ruleId": "fintech_exported_service_receiver_high_sensitivity_blocker",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"],
+        "dataSensitivity": ["high", "regulated"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For fintech/high-sensitivity apps, unguarded exported services or receivers can expose payment, auth, or account workflows and should block release until validated or protected."
+      }
+    },
+    {
+      "ruleId": "fintech_exported_service_receiver_payments_blocker",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"],
+        "payments": true
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Payment-capable fintech apps should not ship unguarded exported service/receiver entry points without a documented caller and input-validation contract."
+      }
+    },
+    {
+      "ruleId": "fintech_backup_high_sensitivity_blocker",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA",
+        "dataSensitivity": ["high", "regulated"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For fintech/high-sensitivity apps, backup or data extraction without explicit exclusions can persist auth state or regulated user data and should block release."
+      }
+    },
+    {
+      "ruleId": "fintech_cleartext_should_fix",
+      "when": {
+        "evidenceType": "CLEARTEXT_TRAFFIC_ALLOWED"
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": false,
+        "appProfileImpact": "For fintech apps, broad cleartext allowance is treated as a release blocker unless explicitly scoped and accepted."
+      }
+    },
+    {
+      "ruleId": "fintech_deeplink_payment_review",
+      "when": {
+        "evidenceType": "DEEPLINK_ACCEPTS_UNTRUSTED_INPUT",
+        "payments": true
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Payment/auth callback links can be expected, but they require narrow filters, state validation, and replay/redirect review."
+      }
+    }
+  ]
+}

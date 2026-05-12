@@ -1,0 +1,47 @@
+{
+  "policyPackId": "production_release_policy",
+  "version": "0.1.0",
+  "description": "Rules for production candidates and externally shipped releases.",
+  "rules": [
+    {
+      "ruleId": "debuggable_should_fix_in_beta",
+      "when": {
+        "evidenceType": "DEBUGGABLE_OR_TEST_CONFIG_IN_RELEASE",
+        "releaseStage": "beta"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Build/release owner",
+        "manualReviewRequired": false,
+        "appProfileImpact": "A beta build can occasionally be debuggable for controlled testing, but it should be fixed before production and clearly separated from release artifacts."
+      }
+    },
+    {
+      "ruleId": "debuggable_blocks_production",
+      "when": {
+        "evidenceType": "DEBUGGABLE_OR_TEST_CONFIG_IN_RELEASE",
+        "releaseStage": ["production_candidate", "production"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Build/release owner",
+        "manualReviewRequired": false,
+        "appProfileImpact": "A production candidate should not be debuggable; this is a release hygiene blocker."
+      }
+    },
+    {
+      "ruleId": "target_sdk_policy_should_fix",
+      "when": {
+        "evidenceType": "SDK_OR_TARGET_API_POLICY_RISK"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Release owner",
+        "appProfileImpact": "Production releases should meet the target SDK policy selected for the release channel."
+      }
+    }
+  ]
+}

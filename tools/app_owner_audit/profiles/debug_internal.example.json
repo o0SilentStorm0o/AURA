@@ -1,0 +1,16 @@
+{
+  "appCategory": "internal_enterprise",
+  "dataSensitivity": "medium",
+  "releaseStage": "debug",
+  "distribution": "internal",
+  "authFlow": true,
+  "payments": false,
+  "webviewUsageExpected": null,
+  "externalIntegrationsExpected": true,
+  "allowedCleartextDomains": [
+    "10.0.2.2",
+    "localhost"
+  ],
+  "knownExportedComponents": [],
+  "acceptedRisks": []
+}

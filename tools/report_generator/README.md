@@ -25,13 +25,15 @@ priority RED/YELLOW/BLUE items, grouped GRAY abstentions, defensive posture
 highlights, temporal episodes, baseline comparison, and observability limits.
 
 App-owner report mode focuses the report on one package, removes the rest of
-the device inventory from the report surface, and builds a release-risk audit:
+the device inventory from the report surface, and builds a policy-driven
+release-risk audit:
 
 ```bash
 python3 tools/report_generator/generate_report.py \
   artifacts/scenario_runner/aura-last-scan.json \
   --report-type app_owner \
   --target-package com.example.app \
+  --app-profile tools/app_owner_audit/profiles/fintech_high_sensitivity.example.json \
   --out-dir artifacts/reports \
   --basename aura-app-owner-report
 ```
@@ -43,6 +45,7 @@ python3 tools/report_generator/generate_report.py \
   artifacts/scenario_runner/aura-last-scan.json \
   --report-type app_owner \
   --target-package com.example.app \
+  --app-profile tools/app_owner_audit/profiles/fintech_high_sensitivity.example.json \
   --previous-export artifacts/scenario_runner/aura-baseline-scan.json \
   --out-dir artifacts/reports \
   --basename aura-app-owner-retest
@@ -55,6 +58,7 @@ python3 tools/report_generator/generate_report.py \
   artifacts/scenario_runner/aura-last-scan.json \
   --report-type app_owner \
   --target-package com.example.app \
+  --app-profile tools/app_owner_audit/profiles/fintech_high_sensitivity.example.json \
   --offline-analysis artifacts/scenario_runner/offline-apk-analysis.json \
   --previous-export artifacts/scenario_runner/aura-baseline-scan.json \
   --previous-offline-analysis artifacts/scenario_runner/offline-apk-analysis-before.json \
@@ -111,6 +115,12 @@ Supported modes:
 - `minimal_support`: aggregate counts plus priority-only redacted assessment
   details, without full package inventory.
 
+For target-scoped app-owner reports, the audit engine evaluates the internal
+unredacted scoped export first, then the report renderer applies the selected
+privacy mode. This preserves component classification/grouping quality while
+keeping package identifiers, labels, source paths, raw evidence, and component
+names redacted in shared reports.
+
 The report separates:
 
 - threat decision from defensive posture,
@@ -122,18 +132,75 @@ The report separates:
 App-owner reports additionally include:
 
 - target-app scope and environment,
+- app/customer profile and applied policy packs,
 - release readiness: `BLOCKED`, `NEEDS_FIXES`, `REVIEW_RECOMMENDED`, or `PASS`,
 - top fix plan suitable for a CTO/release owner,
-- release-risk findings with `P1`, `P2`, `P3`, and `INFO` priorities,
+- top review areas / finding groups so a large SDK-heavy app is summarized as
+  a few release-risk stories instead of a long manifest-component dump,
+- release-risk findings with `P1`, `P2`, `P3`, and `INFO` priorities in the
+  technical appendix,
+- component classification and evidence strength for each group/finding,
+- finding status: `BLOCKER`, `SHOULD_FIX`, `REVIEW`, `INFO`,
+  `ACCEPTED_RISK`, or `NOT_APPLICABLE`,
 - stable finding fingerprints for retest comparison,
-- acceptance criteria, remediation, verification check, owner, and
-  manual-review guidance,
-- release-risk retest diff.
+- app profile impact, acceptance criteria, remediation, verification check,
+  owner, and manual-review guidance,
+- release-risk retest diff,
+- accepted risks / not-applicable items when supplied by the app profile,
+- policy quality metrics for blocker density, actionability, manual-review
+  rate, grouped-finding reduction, and accepted-risk recurrence.
+
+Optional host-side LLM/RAG wording can be generated separately and passed into
+the report. The LLM layer can rewrite group summaries and review questions, but
+it cannot create findings, change priorities, or add evidence:
+
+```bash
+python3 tools/app_owner_audit/audit_engine.py \
+  artifacts/scenario_runner/aura-last-scan.scoped.json \
+  --app-profile tools/app_owner_audit/profiles/ecommerce_marketplace.example.json \
+  --out artifacts/reports/aura-audit.json
+
+python3 tools/llm_summary/llm_summary.py \
+  artifacts/reports/aura-audit.json \
+  --out artifacts/reports/aura-group-summary.json \
+  --llm-mode strict \
+  --local-llm-url http://localhost:11434 \
+  --model qwen2.5:3b \
+  --qdrant-url http://localhost:6333 \
+  --embedding-url http://localhost:11434 \
+  --embedding-model nomic-embed-text \
+  --embedding-mode ollama \
+  --llm-timeout-seconds 180
+
+python3 tools/report_generator/generate_report.py \
+  artifacts/scenario_runner/aura-last-scan.json \
+  --report-type app_owner \
+  --target-package com.example.app \
+  --app-profile tools/app_owner_audit/profiles/ecommerce_marketplace.example.json \
+  --group-summary-json artifacts/reports/aura-group-summary.json \
+  --out-dir artifacts/reports \
+  --basename aura-app-owner-report
+```
+
+The supported local LLM runtime is native macOS Ollama with Metal acceleration
+and `qwen2.5:3b`. Qdrant should be local-only, for example
+`-p 127.0.0.1:6333:6333` when using Docker. Model downloads need network
+access once; customer report generation should run against local models and
+local RAG docs.
 
 The release-risk findings are the canonical customer task list. Supporting
 runtime abuse context, capability/component summaries, offline analyzer rows,
 observability limits, and reproducibility metadata are kept in the technical
 appendix so they do not compete with the customer-facing fix plan.
+
+The LLM/RAG payload is optional. It is only allowed to rewrite the existing
+group summaries and review questions; the report generator still renders the
+policy-engine `ReleaseRiskFinding` and `FindingGroup` objects as the source of
+truth.
+
+Custom policy packs passed to the app-owner audit engine are additive. The
+report shows the full ladder of applied policy packs, and each finding keeps a
+`policyTrace` so customer profile overrides and accepted risks remain auditable.
 
 HTML output is generated without JavaScript, escapes app-provided strings, and
 includes a restrictive Content-Security-Policy meta tag. This matters because

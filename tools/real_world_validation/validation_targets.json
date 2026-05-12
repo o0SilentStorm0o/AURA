@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "gastromapa",
+      "clientName": "Futured",
+      "appName": "Gastromapa Lukase Hejlika",
+      "packageName": "com.thefuntasty.gmlh",
+      "profile": {
+        "appCategory": "public_info",
+        "dataSensitivity": "low",
+        "releaseStage": "production_candidate",
+        "distribution": "google_play",
+        "authFlow": false,
+        "payments": false,
+        "webviewUsageExpected": false,
+        "externalIntegrationsExpected": true,
+        "allowedCleartextDomains": [],
+        "knownExportedComponents": [],
+        "acceptedRisks": []
+      },
+      "validationRole": "negative_control",
+      "notes": "Location/food discovery app. Useful to test whether AURA avoids permission panic."
+    },
+    {
+      "id": "bikeflip",
+      "clientName": "Pixelmate",
+      "appName": "Bikeflip",
+      "packageName": "com.bikeflip.app",
+      "profile": {
+        "appCategory": "ecommerce",
+        "dataSensitivity": "medium",
+        "releaseStage": "production_candidate",
+        "distribution": "google_play",
+        "authFlow": true,
+        "payments": true,
+        "webviewUsageExpected": true,
+        "externalIntegrationsExpected": true,
+        "allowedCleartextDomains": [],
+        "knownExportedComponents": [],
+        "acceptedRisks": []
+      },
+      "validationRole": "marketplace_with_payments",
+      "notes": "Marketplace app with payment/auth/link SDK surface. Good test for context-aware exported component triage."
+    },
+    {
+      "id": "bistro",
+      "clientName": "GoodRequest",
+      "appName": "Bistro.sk",
+      "packageName": "sk.azet.bistro",
+      "profile": {
+        "appCategory": "ecommerce",
+        "dataSensitivity": "medium",
+        "releaseStage": "production_candidate",
+        "distribution": "google_play",
+        "authFlow": true,
+        "payments": true,
+        "webviewUsageExpected": true,
+        "externalIntegrationsExpected": true,
+        "allowedCleartextDomains": [],
+        "knownExportedComponents": [],
+        "acceptedRisks": []
+      },
+      "validationRole": "large_ecommerce_payment_app",
+      "notes": "Large food-ordering app. Good stress test for component-surface noise and SDK/integration context."
+    },
+    {
+      "id": "isnemovna",
+      "clientName": "Ackee",
+      "appName": "iSnemovna",
+      "packageName": "cz.ackee.isnemovna",
+      "profile": {
+        "appCategory": "public_info",
+        "dataSensitivity": "low",
+        "releaseStage": "production_candidate",
+        "distribution": "google_play",
+        "authFlow": false,
+        "payments": false,
+        "webviewUsageExpected": false,
+        "externalIntegrationsExpected": false,
+        "allowedCleartextDomains": [],
+        "knownExportedComponents": [],
+        "acceptedRisks": []
+      },
+      "validationRole": "public_info_negative_control",
+      "notes": "Low-sensitivity public information app directly tied to Ackee. Good no-panic control."
+    }
+  ]
+}

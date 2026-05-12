@@ -326,18 +326,32 @@ class GenerateReportTest(unittest.TestCase):
             scoped,
             report_type="app_owner",
             offline_analysis=offline_analysis_fixture(),
+            app_profile={
+                "appCategory": "fintech",
+                "dataSensitivity": "high",
+                "releaseStage": "production_candidate",
+                "payments": True,
+            },
         )
 
         self.assertIn("AURA App Owner Release Risk Report", markdown)
         self.assertIn("Release Readiness", markdown)
         self.assertIn("Top Fix Plan", markdown)
+        self.assertIn("Top Review Areas", markdown)
         self.assertIn("Release Risk Findings", markdown)
         self.assertIn("Blocked before release", markdown)
+        self.assertIn("App profile | `fintech` / `high` / `production_candidate`", markdown)
+        self.assertIn("fintech_policy", markdown)
+        self.assertIn("For fintech apps", markdown)
         self.assertIn("P1", markdown)
         self.assertIn("EXPORTED_COMPONENT_WITHOUT_GUARD", markdown)
         self.assertIn("Release-Risk Retest Diff", markdown)
+        self.assertIn("Accepted Risks and Not Applicable Items", markdown)
+        self.assertIn("Policy Quality Metrics", markdown)
         self.assertIn("Acceptance criteria", markdown)
         self.assertIn("Verification command/check", markdown)
+        self.assertIn("Evidence strength", markdown)
+        self.assertIn("Exploitability", markdown)
         self.assertIn("Suggested owner", markdown)
         self.assertIn("Capability and Component Surface", markdown)
         self.assertIn("Offline APK Analyzer Findings", markdown)
@@ -380,6 +394,54 @@ class GenerateReportTest(unittest.TestCase):
         self.assertIn("| Fixed | 1 | `EXPORTED_COMPONENT_WITHOUT_GUARD` |", markdown)
         self.assertIn("| Remaining | 1 | `CLEARTEXT_TRAFFIC_ALLOWED` |", markdown)
         self.assertIn("| New/regressed | 0 | `none` |", markdown)
+
+    def test_app_owner_report_accepts_validated_group_summary_payload(self) -> None:
+        scoped = scope_export_to_package(export_fixture(), "com.flashlight.cleaner.update")
+
+        markdown = render_markdown(
+            scoped,
+            report_type="app_owner",
+            offline_analysis=offline_analysis_fixture("NETWORK_SECURITY_CONFIG_CLEARTEXT_PERMITTED"),
+            group_summary_payload={
+                "groupSummaries": [
+                    {
+                        "groupId": "NETWORK_TRANSPORT_REVIEW",
+                        "customerSummary": "Validated local LLM wording for the network review area.",
+                        "recommendedReview": ["Confirm release config has no broad cleartext exception."],
+                        "confidenceText": "Static APK analysis only; exploitability not proven.",
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("Validated local LLM wording for the network review area.", markdown)
+        self.assertIn("Confirm release config has no broad cleartext exception.", markdown)
+        self.assertIn("Static APK analysis only; exploitability not proven.", markdown)
+
+    def test_app_owner_report_can_audit_unredacted_source_while_rendering_redacted_export(self) -> None:
+        scoped = scope_export_to_package(export_fixture(), "com.flashlight.cleaner.update")
+        scoped["defensiveSurfaceFindings"][0]["rawValue"] = (
+            "activity:com.stripe.android.payments.StripeBrowserProxyReturnActivity;"
+            "activity:com.stripe.android.link.LinkRedirectHandlerActivity"
+        )
+        redacted = redact_export(scoped, mode=REDACTED_EXPERT, salt="report-test", salt_provided=True)
+
+        markdown = render_markdown(
+            redacted,
+            report_type="app_owner",
+            audit_export=scoped,
+            app_profile={
+                "appCategory": "ecommerce",
+                "dataSensitivity": "medium",
+                "releaseStage": "production_candidate",
+                "payments": True,
+            },
+        )
+
+        self.assertIn("Payment / financial redirect surfaces need review", markdown)
+        self.assertIn("callback state/nonce", markdown)
+        self.assertIn("Report privacy mode: `REDACTED_EXPERT`", markdown)
+        self.assertNotIn("StripeBrowserProxyReturnActivity", markdown)
 
     def test_public_teaser_suppresses_raw_detail_and_sets_scope(self) -> None:
         scoped = scope_export_to_package(export_fixture(), "com.flashlight.cleaner.update")

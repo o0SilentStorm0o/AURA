@@ -1,0 +1,33 @@
+{
+  "policyPackId": "internal_enterprise_policy",
+  "version": "0.1.0",
+  "description": "Context rules for internal enterprise applications.",
+  "rules": [
+    {
+      "ruleId": "internal_enterprise_cleartext_review",
+      "when": {
+        "evidenceType": "CLEARTEXT_TRAFFIC_ALLOWED"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Internal enterprise apps may use private infrastructure, but broad cleartext still needs explicit network and environment justification."
+      }
+    },
+    {
+      "ruleId": "internal_exported_surface_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Internal apps can have enterprise integration entry points, but unguarded exported components should be reviewed before managed deployment."
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "appCategory": "fintech",
+  "dataSensitivity": "high",
+  "releaseStage": "production_candidate",
+  "distribution": "google_play",
+  "authFlow": true,
+  "payments": true,
+  "webviewUsageExpected": false,
+  "externalIntegrationsExpected": true,
+  "allowedCleartextDomains": [],
+  "knownExportedComponents": [
+    "com.example.PaymentCallbackActivity"
+  ],
+  "acceptedRisks": []
+}

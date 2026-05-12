@@ -1063,6 +1063,8 @@ def release_readiness_section(
 ) -> list[str]:
     status = audit.get("releaseStatus", {})
     counts = audit.get("priorityCounts", {})
+    status_counts = audit.get("statusCounts", {})
+    profile = audit.get("appProfile", {})
     return [
         "## Release Readiness",
         "",
@@ -1071,12 +1073,16 @@ def release_readiness_section(
         "| Axis | Result |",
         "| --- | --- |",
         f"| Target app | `{md_escape(title_for_app(assessment))}` |",
+        f"| App profile | `{profile.get('appCategory', 'unknown')}` / `{profile.get('dataSensitivity', 'unknown')}` / `{profile.get('releaseStage', 'unknown')}` |",
+        f"| Policy packs | `{', '.join(audit.get('policyPacksApplied', [])) or 'none'}` |",
         f"| Generated at | `{iso_time(export.get('generatedAt'))}` |",
         f"| Release status | `{status.get('status', 'unknown')}` |",
         f"| P1 blocker findings | `{counts.get('P1', 0)}` |",
         f"| P2 should-fix findings | `{counts.get('P2', 0)}` |",
         f"| P3 review findings | `{counts.get('P3', 0)}` |",
         f"| INFO items | `{counts.get('INFO', 0)}` |",
+        f"| Accepted risks | `{status_counts.get('ACCEPTED_RISK', 0)}` |",
+        f"| Not applicable | `{status_counts.get('NOT_APPLICABLE', 0)}` |",
         f"| Ready for external beta | `{bool_text(status.get('readyForExternalBeta'))}` |",
         f"| Ready for production | `{bool_text(status.get('readyForProduction'))}` |",
         f"| Retest recommended | `{bool_text(status.get('retestRecommended'))}` |",
@@ -1112,10 +1118,28 @@ def top_fix_action(finding: dict[str, Any]) -> str:
 
 
 def top_fix_plan_section(audit: dict[str, Any], limit: int = 8) -> list[str]:
-    findings = audit.get("findings", [])
+    groups = [
+        group for group in audit.get("findingGroups", [])
+        if group.get("status") in {"BLOCKER", "SHOULD_FIX", "REVIEW"}
+    ]
+    findings = [
+        finding for finding in audit.get("findings", [])
+        if finding.get("status") in {"BLOCKER", "SHOULD_FIX", "REVIEW"}
+    ]
     lines = ["## Top Fix Plan", ""]
-    if not findings:
+    if not findings and not groups:
         return lines + ["No release-risk fix plan was generated from supplied evidence.", ""]
+    if groups:
+        for index, group in enumerate(groups[:limit], start=1):
+            component_text = ""
+            if group.get("componentCount"):
+                component_text = f"; {group.get('componentCount')} component(s)"
+            lines.append(
+                f"{index}. {group.get('priority')}: {md_escape(group.get('title'))} "
+                f"({group.get('owner')}; {group.get('status')}{component_text}; verify: {md_escape(group.get('verificationCheck'))})"
+            )
+        lines += [""]
+        return lines
     seen: set[str] = set()
     plan: list[str] = []
     for finding in findings:
@@ -1135,18 +1159,138 @@ def top_fix_plan_section(audit: dict[str, Any], limit: int = 8) -> list[str]:
     return lines
 
 
+def release_risk_groups_section(
+    audit: dict[str, Any],
+    group_summary_payload: dict[str, Any] | None = None,
+) -> list[str]:
+    summary_by_group = {
+        str(item.get("groupId")): item
+        for item in (group_summary_payload or {}).get("groupSummaries", [])
+        if item.get("groupId")
+    }
+    groups = [
+        group for group in audit.get("findingGroups", [])
+        if group.get("status") in {"BLOCKER", "SHOULD_FIX", "REVIEW"}
+    ]
+    lines = ["## Top Review Areas", ""]
+    if not groups:
+        return lines + [
+            "No customer-visible release-risk review areas were generated from the supplied evidence.",
+            "",
+        ]
+    lines += [
+        "| Area | Status | Priority | Findings | Components | Evidence strength | Exploitability |",
+        "| --- | --- | --- | ---: | ---: | --- | --- |",
+    ]
+    for group in groups:
+        strength = group.get("evidenceStrength") or {}
+        lines.append(
+            f"| {md_escape(group.get('title'))} | `{group.get('status')}` | `{group.get('priority')}` | "
+            f"{group.get('findingCount', 0)} | {group.get('componentCount', 0)} | "
+            f"{md_escape(strength.get('level', 'unknown'))} | {md_escape(strength.get('exploitability', 'unknown'))} |"
+        )
+    lines += [""]
+    for group in groups:
+        strength = group.get("evidenceStrength") or {}
+        summary_override = summary_by_group.get(str(group.get("groupId"))) or {}
+        affected = group.get("affectedComponents") or []
+        confidence_text = summary_override.get("confidenceText") or strength.get("summary")
+        lines += [
+            f"### {group.get('priority')} {md_escape(group.get('title'))}",
+            "",
+            f"- Group ID: `{group.get('id')}`",
+            f"- Status: `{group.get('status')}`",
+            f"- Finding IDs: `{', '.join(group.get('findingIds', []))}`",
+            f"- Component class: `{group.get('componentClass') or 'n/a'}`",
+            f"- SDK/context hint: `{group.get('sdk') or 'n/a'}`",
+            f"- Evidence strength: {md_escape(strength.get('level', 'unknown'))}",
+            f"- Exploitability: {md_escape(strength.get('exploitability', 'unknown'))}",
+            f"- Needs: {md_escape(' / '.join(strength.get('needs', [])) or 'manual review')}",
+            f"- Manual review required: `{bool_text(group.get('manualReviewRequired'))}`",
+            f"- Summary: {md_escape(summary_override.get('customerSummary') or group.get('customerSummary'))}",
+            f"- Confidence text: {md_escape(confidence_text)}",
+            "",
+        ]
+        if affected:
+            lines += ["Affected components:", ""]
+            lines += [f"- `{md_escape(component)}`" for component in affected[:12]]
+            if len(affected) > 12:
+                lines.append(f"- ... `{len(affected) - 12}` more")
+            lines.append("")
+        recommended = summary_override.get("recommendedReview") or group.get("recommendedReview") or []
+        if recommended:
+            lines += ["Recommended review:", ""]
+            lines += [f"- {md_escape(item)}" for item in recommended]
+            lines.append("")
+        lines += [
+            f"Acceptance criteria: {md_escape(group.get('groupAcceptanceCriteria') or group.get('acceptanceCriteria'))}",
+            "",
+            f"Verification: {md_escape(group.get('groupVerificationCheck') or group.get('verificationCheck'))}",
+            "",
+        ]
+    return lines
+
+
+def report_suppresses_component_detail(export: dict[str, Any]) -> bool:
+    privacy = export.get("privacy") or {}
+    return privacy.get("componentNames") in {"redacted_aliases", "suppressed"}
+
+
+def redact_audit_for_report(audit: dict[str, Any], export: dict[str, Any]) -> dict[str, Any]:
+    if not report_suppresses_component_detail(export):
+        return audit
+    redacted = copy.deepcopy(audit)
+    component_aliases: dict[str, str] = {}
+
+    def alias(value: Any) -> str:
+        key = str(value or "")
+        if key not in component_aliases:
+            component_aliases[key] = f"component_{len(component_aliases) + 1:03d}"
+        return component_aliases[key]
+
+    for group in redacted.get("findingGroups", []):
+        group["affectedComponents"] = [alias(component) for component in group.get("affectedComponents", [])]
+    redacted["releaseRiskGroups"] = redacted.get("findingGroups", [])
+
+    for finding in redacted.get("findings", []):
+        affected = finding.get("affectedSurface") or {}
+        raw = str((finding.get("evidence") or {}).get("rawValue") or "")
+        component_name = affected.get("name") or affected.get("componentName") or raw
+        component_alias = alias(component_name)
+        title = str(finding.get("title") or "")
+        if ":" in title and finding.get("type") == "EXPORTED_COMPONENT_WITHOUT_GUARD":
+            title = title.split(":", 1)[0].strip()
+        finding["title"] = title
+        finding["evidenceSubject"] = component_alias
+        if affected:
+            affected["name"] = component_alias
+            affected["componentName"] = component_alias
+        evidence = finding.get("evidence") or {}
+        if evidence:
+            evidence["rawValue"] = "<redacted component evidence>"
+        for extra in finding.get("additionalEvidence", []) or []:
+            extra["rawValue"] = "<redacted component evidence>"
+    redacted["releaseRiskFindings"] = redacted.get("findings", [])
+    redacted.setdefault("privacy", {})
+    redacted["privacy"]["componentAliasCount"] = len(component_aliases)
+    return redacted
+
+
 def audit_finding_rows(findings: list[dict[str, Any]]) -> list[str]:
     lines = [
-        "| ID | Priority | Finding | Confidence | Owner | Manual review | Evidence |",
-        "| --- | --- | --- | ---: | --- | --- | --- |",
+        "| ID | Status | Priority | Area | Component class | Finding | Confidence | Evidence strength | Evidence |",
+        "| --- | --- | --- | --- | --- | --- | ---: | --- | --- |",
     ]
     for finding in findings:
         evidence = finding.get("evidence") or {}
+        classification = finding.get("componentClassification") or {}
+        strength = finding.get("evidenceStrength") or {}
         evidence_text = f"{evidence.get('source')} / {evidence.get('sourceFindingType')}: {evidence.get('rawValue') or 'evidence exported'}"
         lines.append(
-            f"| `{finding.get('id')}` | `{finding.get('priority')}` | {md_escape(finding.get('title'))} | "
-            f"{score(finding.get('confidence'))} | {md_escape(finding.get('owner'))} | "
-            f"`{bool_text(finding.get('requiresManualReview'))}` | {md_escape(evidence_text)} |"
+            f"| `{finding.get('id')}` | `{finding.get('status', 'OPEN')}` | `{finding.get('priority')}` | "
+            f"{md_escape(classification.get('groupTitle', 'n/a'))} | `{classification.get('componentClass', 'n/a')}` | "
+            f"{md_escape(finding.get('title'))} | {score(finding.get('confidence'))} | "
+            f"{md_escape(strength.get('level', 'unknown'))} | {md_escape(evidence_text)} |"
         )
     return lines
 
@@ -1162,14 +1306,23 @@ def release_risk_findings_section(audit: dict[str, Any]) -> list[str]:
     lines += audit_finding_rows(findings)
     lines += [""]
     for finding in findings:
+        classification = finding.get("componentClassification") or {}
+        strength = finding.get("evidenceStrength") or {}
         lines += [
             f"### {finding.get('priority')} {md_escape(finding.get('title'))}",
             "",
             f"- Finding ID: `{finding.get('id')}`",
             f"- Type: `{finding.get('type')}`",
+            f"- Status: `{finding.get('status', 'OPEN')}`",
+            f"- Review area: {md_escape(classification.get('groupTitle', 'n/a'))}",
+            f"- Component classification: `{classification.get('componentClass', 'n/a')}`",
+            f"- Evidence strength: {md_escape(strength.get('level', 'unknown'))}",
+            f"- Exploitability: {md_escape(strength.get('exploitability', 'unknown'))}",
+            f"- Needs: {md_escape(' / '.join(strength.get('needs', [])) or 'manual review')}",
             f"- Fingerprint: `{finding.get('fingerprint')}`",
             f"- Suggested owner: `{md_escape(finding.get('owner'))}`",
             f"- Requires manual review: `{bool_text(finding.get('requiresManualReview'))}`",
+            f"- App profile impact: {md_escape(finding.get('appProfileImpact'))}",
             f"- Acceptance criteria: {md_escape(finding.get('acceptanceCriteria'))}",
             f"- Why it matters: {md_escape(finding.get('whyItMatters'))}",
             f"- How to fix: {md_escape(finding.get('howToFix'))}",
@@ -1197,8 +1350,62 @@ def audit_retest_section(
         f"| Remaining | {len(diff.get('remaining', []))} | `{', '.join(item.get('type', '') for item in diff.get('remaining', [])) or 'none'}` |",
         f"| New/regressed | {len(diff.get('new', []))} | `{', '.join(item.get('type', '') for item in diff.get('new', [])) or 'none'}` |",
         "",
+        f"Retest resolution rate: `{score(diff.get('resolutionRate'))}`",
+        "",
     ]
     return lines
+
+
+def accepted_risks_section(audit: dict[str, Any]) -> list[str]:
+    accepted = [
+        finding for finding in audit.get("findings", [])
+        if finding.get("status") in {"ACCEPTED_RISK", "NOT_APPLICABLE"}
+    ]
+    lines = ["## Accepted Risks and Not Applicable Items", ""]
+    if not accepted:
+        return lines + [
+            "No accepted-risk or not-applicable items were supplied in the app profile for this audit.",
+            "",
+        ]
+    lines += [
+        "| ID | Status | Type | Evidence subject | Reason / profile impact |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for finding in accepted:
+        lines.append(
+            f"| `{finding.get('id')}` | `{finding.get('status')}` | `{finding.get('type')}` | "
+            f"`{md_escape(finding.get('evidenceSubject'))}` | {md_escape(finding.get('appProfileImpact'))} |"
+        )
+    lines += [
+        "",
+        "Accepted risks remain visible for traceability. They do not count as new blockers, but they are retained so repeat audits do not reintroduce the same item as surprise noise.",
+        "",
+    ]
+    return lines
+
+
+def policy_quality_section(audit: dict[str, Any]) -> list[str]:
+    metrics = audit.get("policyQualityMetrics") or {}
+    if not metrics:
+        return []
+    return [
+        "### Policy Quality Metrics",
+        "",
+        "| Metric | Value |",
+        "| --- | ---: |",
+        f"| Blocker density | `{metrics.get('blockerDensity', 0)}` |",
+        f"| Customer-visible findings | `{metrics.get('customerVisibleFindingCount', 0)}` |",
+        f"| Customer-visible review areas | `{metrics.get('customerVisibleReviewAreaCount', 0)}` |",
+        f"| Largest review area size | `{metrics.get('largestReviewAreaSize', 0)}` |",
+        f"| Grouped finding reduction | `{metrics.get('groupedFindingReduction', 0)}` |",
+        f"| Actionable rate | `{score(metrics.get('actionableRate'))}` |",
+        f"| Manual review rate | `{score(metrics.get('manualReviewRate'))}` |",
+        f"| Accepted risk recurrence | `{metrics.get('acceptedRiskRecurrence', 0)}` |",
+        f"| Not applicable count | `{metrics.get('notApplicableCount', 0)}` |",
+        "",
+        "These metrics are internal tuning aids. They help keep P1 rare, developer actions ticket-ready, and customer-visible noise under control.",
+        "",
+    ]
 
 
 def runtime_abuse_context_section(
@@ -1234,6 +1441,8 @@ def app_owner_reproducibility_summary(export: dict[str, Any], audit: dict[str, A
         f"- Export schema version: `{export.get('schemaVersion')}`",
         f"- Report generator version: `{REPORT_GENERATOR_VERSION}`",
         f"- App-owner audit engine version: `{audit.get('auditEngineVersion', 'unknown')}`",
+        f"- App-owner policy pack version: `{audit.get('policyPackVersion', 'unknown')}`",
+        f"- Policy packs applied: `{', '.join(audit.get('policyPacksApplied', [])) or 'none'}`",
         f"- Offline APK analyzer version: `{(offline_apk or {}).get('analyzerVersion', 'not supplied')}`",
         f"- Collector version: `{snapshot.get('collectorVersion', 'unknown')}`",
         f"- Scan ID: `{export.get('scanId', 'unknown')}`",
@@ -1284,8 +1493,12 @@ def render_app_owner_markdown(
     export: dict[str, Any],
     *,
     previous_export: dict[str, Any] | None = None,
+    audit_export: dict[str, Any] | None = None,
+    previous_audit_export: dict[str, Any] | None = None,
     offline_analysis: dict[str, Any] | None = None,
     previous_offline_analysis: dict[str, Any] | None = None,
+    app_profile: dict[str, Any] | None = None,
+    group_summary_payload: dict[str, Any] | None = None,
 ) -> str:
     assessment = export.get("assessments", [{}])[0]
     package = package_name(assessment)
@@ -1299,22 +1512,27 @@ def render_app_owner_markdown(
         previous_offline_analysis,
         (previous_export or {}).get("reportScope", {}).get("targetPackage", previous_package),
     )
-    current_audit = build_app_owner_audit(export, offline_analysis=offline_analysis)
+    audit_source_export = audit_export or export
+    previous_audit_source_export = previous_audit_export or previous_export
+    current_audit = build_app_owner_audit(audit_source_export, offline_analysis=offline_analysis, app_profile=app_profile)
     previous_audit = (
-        build_app_owner_audit(previous_export, offline_analysis=previous_offline_analysis)
-        if previous_export is not None
+        build_app_owner_audit(previous_audit_source_export, offline_analysis=previous_offline_analysis, app_profile=app_profile)
+        if previous_audit_source_export is not None
         else None
     )
+    render_audit = redact_audit_for_report(current_audit, export)
+    render_previous_audit = redact_audit_for_report(previous_audit, export) if previous_audit else None
     lines = [
         "# AURA App Owner Release Risk Report",
         "",
         f"Generated from scan `{export.get('scanId', 'unknown')}`.",
         "",
     ]
-    lines += release_readiness_section(export, assessment, current_audit, package_episodes)
-    lines += top_fix_plan_section(current_audit)
-    lines += release_risk_findings_section(current_audit)
-    lines += audit_retest_section(current_audit, previous_audit)
+    lines += release_readiness_section(export, assessment, render_audit, package_episodes)
+    lines += top_fix_plan_section(render_audit)
+    lines += release_risk_groups_section(render_audit, group_summary_payload=group_summary_payload)
+    lines += audit_retest_section(render_audit, render_previous_audit)
+    lines += accepted_risks_section(render_audit)
     lines += [
         "## Scope and Methodology",
         "",
@@ -1334,6 +1552,7 @@ def render_app_owner_markdown(
     ]
     lines += demote_section(app_owner_scope_section(export, assessment))
     lines += demote_section(capability_surface_section(assessment))
+    lines += demote_section(release_risk_findings_section(render_audit))
     lines += demote_section(offline_apk_analyzer_section(current_offline_apk, export))
     lines += demote_section(runtime_abuse_context_section(assessment, posture))
     lines += [
@@ -1344,7 +1563,8 @@ def render_app_owner_markdown(
         "- Defensive findings are app-hardening signals, not malware verdicts.",
         "",
     ]
-    lines += app_owner_reproducibility_summary(export, current_audit, current_offline_apk)
+    lines += app_owner_reproducibility_summary(export, render_audit, current_offline_apk)
+    lines += policy_quality_section(current_audit)
     return "\n".join(lines)
 
 
@@ -1545,6 +1765,7 @@ def render_public_teaser_markdown(
     evaluation: dict[str, Any] | None = None,
     *,
     max_findings: int = 3,
+    app_profile: dict[str, Any] | None = None,
 ) -> str:
     assessment = export.get("assessments", [{}])[0]
     package = package_name(assessment)
@@ -1694,9 +1915,13 @@ def render_markdown(
     top_apps: int = 12,
     report_type: str = "device_expert",
     previous_export: dict[str, Any] | None = None,
+    audit_export: dict[str, Any] | None = None,
+    previous_audit_export: dict[str, Any] | None = None,
     offline_analysis: dict[str, Any] | None = None,
     previous_offline_analysis: dict[str, Any] | None = None,
     max_findings: int = 3,
+    app_profile: dict[str, Any] | None = None,
+    group_summary_payload: dict[str, Any] | None = None,
 ) -> str:
     if report_type == "public_teaser":
         return render_public_teaser_markdown(export, evaluation, max_findings=max_findings)
@@ -1704,8 +1929,12 @@ def render_markdown(
         return render_app_owner_markdown(
             export,
             previous_export=previous_export,
+            audit_export=audit_export,
+            previous_audit_export=previous_audit_export,
             offline_analysis=offline_analysis,
             previous_offline_analysis=previous_offline_analysis,
+            app_profile=app_profile,
+            group_summary_payload=group_summary_payload,
         )
     if report_type != "device_expert":
         raise ValueError(f"Unsupported report_type {report_type!r}")
@@ -2043,9 +2272,13 @@ def write_report(
     top_apps: int,
     report_type: str = "device_expert",
     previous_export: dict[str, Any] | None = None,
+    audit_export: dict[str, Any] | None = None,
+    previous_audit_export: dict[str, Any] | None = None,
     offline_analysis: dict[str, Any] | None = None,
     previous_offline_analysis: dict[str, Any] | None = None,
     max_findings: int = 3,
+    app_profile: dict[str, Any] | None = None,
+    group_summary_payload: dict[str, Any] | None = None,
 ) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     markdown = render_markdown(
@@ -2054,9 +2287,13 @@ def write_report(
         top_apps=top_apps,
         report_type=report_type,
         previous_export=previous_export,
+        audit_export=audit_export,
+        previous_audit_export=previous_audit_export,
         offline_analysis=offline_analysis,
         previous_offline_analysis=previous_offline_analysis,
         max_findings=max_findings,
+        app_profile=app_profile,
+        group_summary_payload=group_summary_payload,
     )
     markdown_path = out_dir / f"{basename}.md"
     html_path = out_dir / f"{basename}.html"
@@ -2081,6 +2318,8 @@ def main() -> int:
     parser.add_argument("--previous-export", type=Path, help="Optional previous AURA export for app-owner retest comparison")
     parser.add_argument("--offline-analysis", type=Path, help="Optional tools/apk_analyzer JSON output for the target APK")
     parser.add_argument("--previous-offline-analysis", type=Path, help="Optional previous offline APK analyzer JSON for retest comparison")
+    parser.add_argument("--app-profile", type=Path, help="Optional app/customer profile JSON for policy-driven app-owner audits")
+    parser.add_argument("--group-summary-json", type=Path, help="Optional validated tools/llm_summary output for app-owner group wording")
     parser.add_argument("--privacy-mode", choices=PRIVACY_MODES, default=FULL_RESEARCH)
     parser.add_argument("--salt", default=DEFAULT_SALT, help="Project/customer-specific redaction salt")
     parser.add_argument(
@@ -2099,10 +2338,13 @@ def main() -> int:
     previous_export = load_json(args.previous_export)
     offline_analysis = load_json(args.offline_analysis)
     previous_offline_analysis = load_json(args.previous_offline_analysis)
+    app_profile = load_json(args.app_profile)
+    group_summary_payload = load_json(args.group_summary_json)
     if args.report_type in {"app_owner", "public_teaser"}:
         if not args.target_package:
             raise ValueError(f"--target-package is required when --report-type {args.report_type}")
         export = scope_export_to_package(export, args.target_package)
+        audit_export = copy.deepcopy(export)
         export.setdefault("reportScope", {})
         export["reportScope"] = {
             **export["reportScope"],
@@ -2113,6 +2355,9 @@ def main() -> int:
         }
         if previous_export is not None:
             previous_export = scope_export_to_package(previous_export, args.target_package)
+            previous_audit_export = copy.deepcopy(previous_export)
+        else:
+            previous_audit_export = None
         if offline_analysis is not None:
             offline_analysis = offline_apk_for_package(offline_analysis, args.target_package)
             if offline_analysis is None:
@@ -2121,6 +2366,9 @@ def main() -> int:
             previous_offline_analysis = offline_apk_for_package(previous_offline_analysis, args.target_package)
             if previous_offline_analysis is None:
                 raise ValueError(f"No previous offline APK analysis entry matched target package {args.target_package!r}")
+    else:
+        audit_export = None
+        previous_audit_export = None
     export = redact_export(
         export,
         mode=privacy_mode,
@@ -2162,9 +2410,13 @@ def main() -> int:
         top_apps=args.top_apps,
         report_type=args.report_type,
         previous_export=previous_export,
+        audit_export=audit_export,
+        previous_audit_export=previous_audit_export,
         offline_analysis=offline_analysis,
         previous_offline_analysis=previous_offline_analysis,
         max_findings=args.max_findings,
+        app_profile=app_profile,
+        group_summary_payload=group_summary_payload,
     )
     print(f"Wrote Markdown report to {markdown_path}")
     print(f"Wrote HTML report to {html_path}")

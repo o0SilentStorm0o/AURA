@@ -18,7 +18,47 @@ from typing import Any
 
 
 AUDIT_ENGINE_VERSION = "aura-app-owner-audit-0.1.0"
+DEFAULT_POLICY_PACK_VERSION = "0.1.0"
+POLICY_DIR = Path(__file__).resolve().parent / "policies"
+COMPONENT_SURFACE_CATALOG_PATH = Path(__file__).resolve().parent / "component_surface_catalog.json"
 PRIORITY_ORDER = {"P1": 0, "P2": 1, "P3": 2, "INFO": 3}
+STATUS_ORDER = {
+    "BLOCKER": 0,
+    "SHOULD_FIX": 1,
+    "REVIEW": 2,
+    "INFO": 3,
+    "ACCEPTED_RISK": 4,
+    "NOT_APPLICABLE": 5,
+}
+STATUS_BY_PRIORITY = {
+    "P1": "BLOCKER",
+    "P2": "SHOULD_FIX",
+    "P3": "REVIEW",
+    "INFO": "INFO",
+}
+GROUP_ORDER = {
+    "RELEASE_BUILD_HYGIENE": 0,
+    "PAYMENT_ACCOUNT_FLOW_SURFACE_REVIEW": 1,
+    "PAYMENT_REDIRECT_SURFACE_REVIEW": 1,
+    "AUTH_CALLBACK_SURFACE_REVIEW": 2,
+    "CUSTOMER_DATA_FLOW_ENTRYPOINT_REVIEW": 3,
+    "APP_ROUTING_ENTRYPOINT_REVIEW": 4,
+    "DEEPLINK_ROUTING_ENTRYPOINT_REVIEW": 4,
+    "WEBVIEW_BROWSER_ENTRYPOINT_REVIEW": 5,
+    "COMPONENT_EXPOSURE_REVIEW": 6,
+    "PREVIEW_TOOLING_RELEASE_REVIEW": 7,
+    "THIRD_PARTY_SDK_EXPORTED_SURFACES": 8,
+    "BACKUP_DATA_EXTRACTION_REVIEW": 9,
+    "NETWORK_TRANSPORT_REVIEW": 10,
+    "WEBVIEW_CONFIGURATION_REVIEW": 11,
+    "SENSITIVE_UI_REVIEW": 12,
+    "SECRETS_CONFIG_REVIEW": 13,
+    "SDK_PRIVACY_SURFACE_REVIEW": 14,
+    "TARGET_API_POLICY_REVIEW": 15,
+    "UNCLASSIFIED_RELEASE_REVIEW": 99,
+}
+ACTIONABLE_STATUSES = {"BLOCKER", "SHOULD_FIX", "REVIEW"}
+CUSTOMER_VISIBLE_STATUSES = {"BLOCKER", "SHOULD_FIX", "REVIEW"}
 SURFACE_PREFIXES = ("activity:", "service:", "receiver:", "provider:")
 TYPE_LEVEL_FINDINGS = {
     "BACKUP_MAY_INCLUDE_SENSITIVE_DATA",
@@ -31,7 +71,135 @@ TYPE_LEVEL_FINDINGS = {
     "SDK_OR_TARGET_API_POLICY_RISK",
     "SECRETS_OR_ENDPOINTS_IN_APK",
     "THIRD_PARTY_SDK_PRIVACY_SURFACE",
-    "DANGEROUS_INTENT_SURFACE_NEEDS_MANUAL_REVIEW",
+    "UNCLASSIFIED_RELEASE_REVIEW_FINDING",
+}
+DEFAULT_APP_PROFILE = {
+    "appCategory": "utility",
+    "dataSensitivity": "medium",
+    "releaseStage": "production_candidate",
+    "distribution": "unknown",
+    "authFlow": False,
+    "payments": False,
+    "webviewUsageExpected": None,
+    "externalIntegrationsExpected": None,
+    "allowedCleartextDomains": [],
+    "knownExportedComponents": [],
+    "acceptedRisks": [],
+}
+CATEGORY_POLICY_PACKS = {
+    "fintech": "fintech_policy.json",
+    "banking": "fintech_policy.json",
+    "health": "health_policy.json",
+    "ecommerce": "ecommerce_policy.json",
+    "chat_social": "ecommerce_policy.json",
+    "media": "public_info_policy.json",
+    "public_info": "public_info_policy.json",
+    "public_sector": "public_info_policy.json",
+    "internal_enterprise": "internal_enterprise_policy.json",
+    "sdk_library": "sdk_library_policy.json",
+}
+DEBUG_RELEASE_STAGES = {"debug", "development", "internal_debug"}
+
+TYPE_GROUPS = {
+    "DEBUGGABLE_OR_TEST_CONFIG_IN_RELEASE": {
+        "componentClass": "RELEASE_BUILD_HYGIENE",
+        "groupId": "RELEASE_BUILD_HYGIENE",
+        "groupTitle": "Release build hygiene needs review",
+        "recommendedReview": [
+            "Confirm the distributed artifact is built from the intended release variant.",
+            "Confirm debug/test-only settings are absent from production candidates.",
+        ],
+    },
+    "BACKUP_MAY_INCLUDE_SENSITIVE_DATA": {
+        "componentClass": "DATA_PERSISTENCE",
+        "groupId": "BACKUP_DATA_EXTRACTION_REVIEW",
+        "groupTitle": "Backup and data extraction policy needs review",
+        "recommendedReview": [
+            "Confirm backup/data extraction behavior matches the app data sensitivity.",
+            "Confirm tokens, secrets, regulated data, and caches are excluded or backup is disabled.",
+        ],
+    },
+    "CLEARTEXT_TRAFFIC_ALLOWED": {
+        "componentClass": "NETWORK_CONFIGURATION",
+        "groupId": "NETWORK_TRANSPORT_REVIEW",
+        "groupTitle": "Network transport configuration needs review",
+        "recommendedReview": [
+            "Confirm cleartext is disabled or scoped to an approved non-sensitive endpoint.",
+            "Confirm release network security config differs from debug-only exceptions where needed.",
+        ],
+    },
+    "WEBVIEW_RISKY_CONFIGURATION": {
+        "componentClass": "WEBVIEW_CONFIGURATION",
+        "groupId": "WEBVIEW_CONFIGURATION_REVIEW",
+        "groupTitle": "WebView configuration needs review",
+        "recommendedReview": [
+            "Confirm loaded origins, JavaScript bridges, mixed content, and file access settings are constrained.",
+            "Confirm untrusted URLs cannot reach privileged app code paths.",
+        ],
+    },
+    "SENSITIVE_SCREEN_NOT_PROTECTED": {
+        "componentClass": "SENSITIVE_UI",
+        "groupId": "SENSITIVE_UI_REVIEW",
+        "groupTitle": "Sensitive UI protection needs review",
+        "recommendedReview": [
+            "Confirm screenshots, screen sharing, and accessibility exposure are acceptable for sensitive flows.",
+            "Apply UI hardening controls where exposure is not intended.",
+        ],
+    },
+    "MISSING_TAPJACKING_DEFENSE_ON_SENSITIVE_ACTION": {
+        "componentClass": "SENSITIVE_UI",
+        "groupId": "SENSITIVE_UI_REVIEW",
+        "groupTitle": "Sensitive UI protection needs review",
+        "recommendedReview": [
+            "Confirm obscured-touch handling is appropriate for sensitive actions.",
+            "Add tapjacking defenses or document why the control is not applicable.",
+        ],
+    },
+    "SENSITIVE_UI_ACCESSIBILITY_EXPOSURE_REVIEW": {
+        "componentClass": "SENSITIVE_UI",
+        "groupId": "SENSITIVE_UI_REVIEW",
+        "groupTitle": "Sensitive UI protection needs review",
+        "recommendedReview": [
+            "Confirm accessibility exposure is appropriate for sensitive views on supported Android versions.",
+            "Apply accessibility privacy controls where the platform and product requirements allow it.",
+        ],
+    },
+    "SDK_OR_TARGET_API_POLICY_RISK": {
+        "componentClass": "TARGET_API_POLICY",
+        "groupId": "TARGET_API_POLICY_REVIEW",
+        "groupTitle": "Target SDK / platform policy needs review",
+        "recommendedReview": [
+            "Confirm target SDK level matches the planned release channel and store policy expectations.",
+            "Retest behavior changes introduced by target SDK upgrades.",
+        ],
+    },
+    "SECRETS_OR_ENDPOINTS_IN_APK": {
+        "componentClass": "SECRETS_CONFIG",
+        "groupId": "SECRETS_CONFIG_REVIEW",
+        "groupTitle": "Embedded secrets and endpoint configuration need review",
+        "recommendedReview": [
+            "Classify each candidate as public identifier, restricted key, endpoint, or true secret.",
+            "Remove or restrict true secrets and document public identifiers.",
+        ],
+    },
+    "THIRD_PARTY_SDK_PRIVACY_SURFACE": {
+        "componentClass": "SDK_PRIVACY_SURFACE",
+        "groupId": "SDK_PRIVACY_SURFACE_REVIEW",
+        "groupTitle": "Third-party SDK privacy surface needs review",
+        "recommendedReview": [
+            "Reconcile detected SDKs with privacy disclosures and consent flows.",
+            "Confirm data-safety statements match SDK behavior in the release artifact.",
+        ],
+    },
+    "UNCLASSIFIED_RELEASE_REVIEW_FINDING": {
+        "componentClass": "UNCLASSIFIED_RELEASE_REVIEW",
+        "groupId": "UNCLASSIFIED_RELEASE_REVIEW",
+        "groupTitle": "Unclassified release review signals need triage",
+        "recommendedReview": [
+            "Classify the signal during manual triage.",
+            "Promote recurring signals into a specific policy rule or mark them not applicable.",
+        ],
+    },
 }
 
 
@@ -155,14 +323,14 @@ DEFINITIONS: dict[str, AuditDefinition] = {
         "Review detected SDKs against privacy disclosures, consent requirements, data processing agreements, and actual app functionality.",
         "Rerun static analysis and review release notes when SDKs are added, removed, or updated.",
     ),
-    "DANGEROUS_INTENT_SURFACE_NEEDS_MANUAL_REVIEW": AuditDefinition(
-        "Intent/component surface needs manual review",
-        "P2",
+    "UNCLASSIFIED_RELEASE_REVIEW_FINDING": AuditDefinition(
+        "Unclassified release review finding",
+        "P3",
         "Android team",
         True,
-        "AURA observed an externally reachable Android surface but cannot prove safety without understanding app logic.",
-        "Review caller validation, intent extras, URI handling, permissions, and state-changing behavior.",
-        "Close the finding only after source review or by constraining the manifest surface and rerunning AURA.",
+        "AURA observed a release-relevant signal that does not yet map to a more specific release-risk type. It is intentionally routed to review instead of being overstated.",
+        "Classify the signal during triage. Convert it to a more specific policy rule when it recurs, or document why it is accepted/not applicable.",
+        "Close the finding after source review, policy refinement, or by rerunning AURA with evidence that maps to a specific release-risk type.",
     ),
 }
 
@@ -188,11 +356,183 @@ TYPE_MAP = {
     "SDK_OR_TARGET_API_POLICY_RISK": "SDK_OR_TARGET_API_POLICY_RISK",
     "EMBEDDED_SECRET_OR_ENDPOINT_REVIEW": "SECRETS_OR_ENDPOINTS_IN_APK",
     "THIRD_PARTY_SDK_PRIVACY_SURFACE": "THIRD_PARTY_SDK_PRIVACY_SURFACE",
+    "DANGEROUS_INTENT_SURFACE_NEEDS_MANUAL_REVIEW": "UNCLASSIFIED_RELEASE_REVIEW_FINDING",
 }
 
 
 def normalize_type(finding_type: str | None) -> str:
-    return TYPE_MAP.get(str(finding_type), "DANGEROUS_INTENT_SURFACE_NEEDS_MANUAL_REVIEW")
+    return TYPE_MAP.get(str(finding_type), "UNCLASSIFIED_RELEASE_REVIEW_FINDING")
+
+
+def load_app_profile(profile: dict[str, Any] | Path | str | None = None) -> dict[str, Any]:
+    if profile is None:
+        payload: dict[str, Any] = {}
+    elif isinstance(profile, (str, Path)):
+        payload = json.loads(Path(profile).read_text())
+    else:
+        payload = dict(profile)
+    merged = {
+        **DEFAULT_APP_PROFILE,
+        **payload,
+    }
+    for list_key in ("allowedCleartextDomains", "knownExportedComponents", "acceptedRisks"):
+        value = merged.get(list_key)
+        if value is None:
+            merged[list_key] = []
+        elif not isinstance(value, list):
+            merged[list_key] = [value]
+    return merged
+
+
+def policy_pack_paths(app_profile: dict[str, Any], policy_paths: list[Path | str] | None = None) -> list[Path]:
+    paths = [POLICY_DIR / "base_android_release_policy.json"]
+    category = str(app_profile.get("appCategory") or "").lower()
+    category_pack = CATEGORY_POLICY_PACKS.get(category)
+    if category_pack:
+        paths.append(POLICY_DIR / category_pack)
+    release_stage = str(app_profile.get("releaseStage") or "").lower()
+    if release_stage in DEBUG_RELEASE_STAGES:
+        paths.append(POLICY_DIR / "debug_build_policy.json")
+    else:
+        paths.append(POLICY_DIR / "production_release_policy.json")
+    if policy_paths:
+        paths.extend(Path(path) for path in policy_paths)
+
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path.resolve()) if path.exists() else str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(path)
+    return deduped
+
+
+def load_policy_packs(
+    app_profile: dict[str, Any],
+    policy_paths: list[Path | str] | None = None,
+) -> list[dict[str, Any]]:
+    packs: list[dict[str, Any]] = []
+    for path in policy_pack_paths(app_profile, policy_paths):
+        if not path.exists():
+            continue
+        payload = json.loads(path.read_text())
+        payload["_path"] = str(path)
+        packs.append(payload)
+    return packs
+
+
+def load_component_surface_catalog() -> dict[str, Any]:
+    if not COMPONENT_SURFACE_CATALOG_PATH.exists():
+        return {
+            "rules": [],
+            "defaults": {
+                "componentClass": "UNKNOWN_EXPORTED_SURFACE",
+                "groupId": "COMPONENT_EXPOSURE_REVIEW",
+                "groupTitle": "Other exported surfaces need review",
+                "recommendedReview": [
+                    "Confirm the component is intentionally reachable from other apps.",
+                    "Confirm manifest permission guards, caller validation, and input validation are sufficient.",
+                ],
+            },
+        }
+    return json.loads(COMPONENT_SURFACE_CATALOG_PATH.read_text())
+
+
+def token_matches(raw_value: str, rule: dict[str, Any]) -> bool:
+    raw = raw_value.lower()
+    match_all = [str(item).lower() for item in rule.get("matchAll", [])]
+    match_any = [str(item).lower() for item in rule.get("matchAny", [])]
+    if match_all and not all(token in raw for token in match_all):
+        return False
+    if match_any and not any(token in raw for token in match_any):
+        return False
+    return bool(match_all or match_any)
+
+
+def component_classification(normalized_type: str, evidence_key: str) -> dict[str, Any]:
+    if normalized_type != "EXPORTED_COMPONENT_WITHOUT_GUARD":
+        fallback = TYPE_GROUPS.get(normalized_type, TYPE_GROUPS["UNCLASSIFIED_RELEASE_REVIEW_FINDING"])
+        return {
+            "componentClass": fallback["componentClass"],
+            "groupId": fallback["groupId"],
+            "groupTitle": fallback["groupTitle"],
+            "recommendedReview": list(fallback.get("recommendedReview", [])),
+            "catalogId": "type_level_policy",
+            "sdk": None,
+        }
+
+    catalog = load_component_surface_catalog()
+    for rule in catalog.get("rules", []):
+        if rule.get("componentClass") == "PREVIEW_OR_TOOLING" and token_matches(evidence_key, rule):
+            return {
+                "componentClass": rule.get("componentClass", "UNKNOWN_EXPORTED_SURFACE"),
+                "groupId": rule.get("groupId", "COMPONENT_EXPOSURE_REVIEW"),
+                "groupTitle": rule.get("groupTitle", "Other exported surfaces need review"),
+                "recommendedReview": list(rule.get("recommendedReview", [])),
+                "catalogId": rule.get("catalogId", "component_catalog"),
+                "sdk": rule.get("sdk"),
+            }
+    for rule in catalog.get("rules", []):
+        if rule.get("sdk") and token_matches(evidence_key, rule):
+            return {
+                "componentClass": rule.get("componentClass", "UNKNOWN_EXPORTED_SURFACE"),
+                "groupId": rule.get("groupId", "COMPONENT_EXPOSURE_REVIEW"),
+                "groupTitle": rule.get("groupTitle", "Other exported surfaces need review"),
+                "recommendedReview": list(rule.get("recommendedReview", [])),
+                "catalogId": rule.get("catalogId", "component_catalog"),
+                "sdk": rule.get("sdk"),
+            }
+    for rule in catalog.get("rules", []):
+        if token_matches(evidence_key, rule):
+            return {
+                "componentClass": rule.get("componentClass", "UNKNOWN_EXPORTED_SURFACE"),
+                "groupId": rule.get("groupId", "COMPONENT_EXPOSURE_REVIEW"),
+                "groupTitle": rule.get("groupTitle", "Other exported surfaces need review"),
+                "recommendedReview": list(rule.get("recommendedReview", [])),
+                "catalogId": rule.get("catalogId", "component_catalog"),
+                "sdk": rule.get("sdk"),
+            }
+    defaults = catalog.get("defaults", {})
+    return {
+        "componentClass": defaults.get("componentClass", "UNKNOWN_EXPORTED_SURFACE"),
+        "groupId": defaults.get("groupId", "COMPONENT_EXPOSURE_REVIEW"),
+        "groupTitle": defaults.get("groupTitle", "Other exported surfaces need review"),
+        "recommendedReview": list(defaults.get("recommendedReview", [])),
+        "catalogId": "component_catalog.default",
+        "sdk": None,
+    }
+
+
+def evidence_strength(source: str, normalized_type: str) -> dict[str, Any]:
+    if normalized_type == "EXPORTED_COMPONENT_WITHOUT_GUARD":
+        if source == "OFFLINE_APK_ANALYZER":
+            return {
+                "level": "Static manifest analysis",
+                "exploitability": "Not proven",
+                "needs": ["source review", "targeted dynamic test"],
+                "summary": "Static APK manifest evidence identifies a review target; exploitability still depends on component logic.",
+            }
+        return {
+            "level": "Manifest-level only",
+            "exploitability": "Not proven",
+            "needs": ["APK offline analysis", "source review", "dynamic test"],
+            "summary": "Installed-app metadata is enough to identify an exported surface, not enough to prove misconfiguration.",
+        }
+    if source == "OFFLINE_APK_ANALYZER":
+        return {
+            "level": "Static APK analysis",
+            "exploitability": "Not proven",
+            "needs": ["source review", "targeted dynamic test"],
+            "summary": "Static evidence supports a release-risk review item, but runtime exploitability is not claimed.",
+        }
+    return {
+        "level": "On-device metadata",
+        "exploitability": "Not proven",
+        "needs": ["APK offline analysis", "source review"],
+        "summary": "No-root metadata supports triage, not a vulnerability proof.",
+    }
 
 
 def offline_apk_for_package(offline_analysis: dict[str, Any] | None, target_package: str) -> dict[str, Any] | None:
@@ -264,11 +604,59 @@ def component_kind(raw_value: str) -> str | None:
     return None
 
 
+def component_short_name(raw_value: str) -> str | None:
+    if ":" not in str(raw_value):
+        return None
+    name = str(raw_value).split(":", 1)[1].strip()
+    if not name:
+        return None
+    return name.rsplit(".", 1)[-1] or name
+
+
+def split_manifest_surface_values(raw_value: str) -> list[str]:
+    parts = [
+        item.strip()
+        for item in str(raw_value or "").split(";")
+        if item.strip()
+    ]
+    surface_parts = [
+        item for item in parts
+        if component_kind(item) is not None
+    ]
+    if len(surface_parts) <= 1:
+        return []
+    return surface_parts
+
+
+def expand_source_finding(source_finding: dict[str, Any]) -> list[dict[str, Any]]:
+    """Split aggregate manifest component evidence into ticket-ready surfaces."""
+
+    normalized = normalize_type(source_finding.get("findingType"))
+    if normalized != "EXPORTED_COMPONENT_WITHOUT_GUARD":
+        return [source_finding]
+    surface_values = split_manifest_surface_values(raw_evidence_key(source_finding))
+    if not surface_values:
+        return [source_finding]
+    expanded: list[dict[str, Any]] = []
+    for index, value in enumerate(surface_values, start=1):
+        item = dict(source_finding)
+        item["rawValue"] = value
+        item["findingId"] = f"{source_finding.get('findingId', 'component')}_{index}"
+        item["humanExplanation"] = (
+            "The app exposes this non-launcher component without a component-level permission. "
+            "AURA split the aggregate manifest evidence into a component-level release-risk item."
+        )
+        expanded.append(item)
+    return expanded
+
+
 def finding_title(normalized_type: str, default_title: str, evidence_key: str) -> str:
     if normalized_type == "EXPORTED_COMPONENT_WITHOUT_GUARD":
         kind = component_kind(evidence_key)
         if kind:
-            return f"Exported {kind} without permission guard"
+            short_name = component_short_name(evidence_key)
+            suffix = f": {short_name}" if short_name else ""
+            return f"Exported {kind} without permission guard{suffix}"
     return default_title
 
 
@@ -289,7 +677,7 @@ def acceptance_criteria(normalized_type: str, evidence_key: str) -> str:
         "SDK_OR_TARGET_API_POLICY_RISK": "Target SDK and platform policy level match the planned release channel.",
         "SECRETS_OR_ENDPOINTS_IN_APK": "All embedded keys/endpoints are classified; true secrets are removed or rotated and public keys are restricted where possible.",
         "THIRD_PARTY_SDK_PRIVACY_SURFACE": "Detected SDKs are reconciled with privacy disclosures, consent flows, and data-processing obligations.",
-        "DANGEROUS_INTENT_SURFACE_NEEDS_MANUAL_REVIEW": "Externally reachable intent surfaces have caller validation, input validation, and documented expected behavior.",
+        "UNCLASSIFIED_RELEASE_REVIEW_FINDING": "The release-relevant signal is classified, reviewed, and either converted to a specific rule, fixed, accepted, or marked not applicable.",
     }
     return criteria.get(normalized_type, "The release owner has reviewed the finding and documented the fix or accepted risk.")
 
@@ -307,6 +695,16 @@ def verification_check(normalized_type: str, evidence_key: str) -> str:
     return checks.get(normalized_type, generic)
 
 
+def default_app_profile_impact(normalized_type: str, app_profile: dict[str, Any]) -> str:
+    category = app_profile.get("appCategory", "utility")
+    sensitivity = app_profile.get("dataSensitivity", "medium")
+    stage = app_profile.get("releaseStage", "production_candidate")
+    return (
+        f"In `{category}` / `{sensitivity}` / `{stage}` context, this release surface "
+        "requires either a fix, explicit manual validation, or documented accepted risk."
+    )
+
+
 def priority_for(normalized_type: str, source_severity: str | None) -> str:
     default = DEFINITIONS[normalized_type].default_priority
     severity = str(source_severity or "").upper()
@@ -317,6 +715,23 @@ def priority_for(normalized_type: str, source_severity: str | None) -> str:
     if normalized_type == "CLEARTEXT_TRAFFIC_ALLOWED" and severity == "LOW":
         return "P3"
     return default
+
+
+def normalized_evidence(
+    source: str,
+    source_finding: dict[str, Any],
+    normalized_type: str,
+    evidence_key: str,
+) -> dict[str, Any]:
+    return {
+        "evidenceType": normalized_type,
+        "source": source,
+        "sourceFindingType": source_finding.get("findingType"),
+        "sourceFindingId": source_finding.get("findingId"),
+        "observabilityState": source_finding.get("observabilityState"),
+        "rawValue": source_finding.get("rawValue") or source_finding.get("humanExplanation") or source_finding.get("explanation"),
+        "componentKind": component_kind(evidence_key),
+    }
 
 
 def audit_finding_from_source(
@@ -332,21 +747,26 @@ def audit_finding_from_source(
     subject = evidence_subject(normalized, evidence_key, specificity)
     priority = priority_for(normalized, source_finding.get("severity"))
     item_fingerprint = fingerprint(package_name_value, normalized, subject)
+    classification = component_classification(normalized, evidence_key)
+    strength = evidence_strength(source, normalized)
     return {
         "id": f"AURA-REL-{item_fingerprint[:8].upper()}",
         "type": normalized,
         "title": finding_title(normalized, definition.title, evidence_key),
         "priority": priority,
+        "status": STATUS_BY_PRIORITY.get(priority, "INFO"),
         "confidence": float(source_finding.get("confidence") or 0.0),
-        "evidence": {
-            "source": source,
-            "sourceFindingType": source_finding.get("findingType"),
-            "sourceFindingId": source_finding.get("findingId"),
-            "observabilityState": source_finding.get("observabilityState"),
-            "rawValue": source_finding.get("rawValue") or source_finding.get("humanExplanation") or source_finding.get("explanation"),
-        },
+        "evidence": normalized_evidence(source, source_finding, normalized, evidence_key),
         "evidenceSubject": subject,
         "sourceSpecificity": specificity,
+        "affectedSurface": {
+            "kind": component_kind(evidence_key) or "app",
+            "value": subject,
+            "componentClass": classification.get("componentClass"),
+        },
+        "componentClassification": classification,
+        "evidenceStrength": strength,
+        "appProfileImpact": default_app_profile_impact(normalized, DEFAULT_APP_PROFILE),
         "whyItMatters": definition.why_it_matters,
         "howToFix": definition.how_to_fix,
         "howToVerify": definition.how_to_verify,
@@ -355,7 +775,156 @@ def audit_finding_from_source(
         "owner": definition.owner,
         "requiresManualReview": definition.requires_manual_review,
         "fingerprint": item_fingerprint,
+        "policyTrace": [],
     }
+
+
+def values_match(actual: Any, expected: Any) -> bool:
+    if expected is None:
+        return True
+    if isinstance(expected, list):
+        return any(values_match(actual, item) for item in expected)
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return bool(actual) is bool(expected)
+    return str(actual).lower() == str(expected).lower()
+
+
+def rule_context(finding: dict[str, Any], app_profile: dict[str, Any]) -> dict[str, Any]:
+    evidence = finding.get("evidence") or {}
+    return {
+        **app_profile,
+        "evidenceType": finding.get("type"),
+        "type": finding.get("type"),
+        "priority": finding.get("priority"),
+        "status": finding.get("status"),
+        "source": evidence.get("source"),
+        "sourceFindingType": evidence.get("sourceFindingType"),
+        "observabilityState": evidence.get("observabilityState"),
+        "componentKind": evidence.get("componentKind") or component_kind(str(evidence.get("rawValue") or "")),
+        "rawValue": evidence.get("rawValue") or "",
+        "evidenceSubject": finding.get("evidenceSubject"),
+    }
+
+
+def rule_matches(rule: dict[str, Any], finding: dict[str, Any], app_profile: dict[str, Any]) -> bool:
+    context = rule_context(finding, app_profile)
+    conditions = rule.get("when") or {}
+    for key, expected in conditions.items():
+        if key == "rawContains":
+            raw = str(context.get("rawValue") or "").lower()
+            if isinstance(expected, list):
+                if not any(str(item).lower() in raw for item in expected):
+                    return False
+            elif str(expected).lower() not in raw:
+                return False
+            continue
+        if key == "rawNotContains":
+            raw = str(context.get("rawValue") or "").lower()
+            if isinstance(expected, list):
+                if any(str(item).lower() in raw for item in expected):
+                    return False
+            elif str(expected).lower() in raw:
+                return False
+            continue
+        if not values_match(context.get(key), expected):
+            return False
+    return True
+
+
+def matches_accepted_risk(finding: dict[str, Any], accepted: dict[str, Any]) -> bool:
+    if accepted.get("fingerprint") and accepted.get("fingerprint") == finding.get("fingerprint"):
+        return True
+    if accepted.get("type") and accepted.get("type") != finding.get("type"):
+        return False
+    subject = str(finding.get("evidenceSubject") or "")
+    if accepted.get("evidenceSubject") and str(accepted["evidenceSubject"]).lower() != subject.lower():
+        return False
+    raw = str((finding.get("evidence") or {}).get("rawValue") or "")
+    if accepted.get("rawContains") and str(accepted["rawContains"]).lower() not in raw.lower():
+        return False
+    return bool(accepted.get("type"))
+
+
+def apply_expected_surface_overrides(finding: dict[str, Any], app_profile: dict[str, Any]) -> None:
+    """Apply customer context that downgrades, but does not erase, review work."""
+
+    raw = str((finding.get("evidence") or {}).get("rawValue") or "")
+    if finding.get("type") == "EXPORTED_COMPONENT_WITHOUT_GUARD":
+        for component in app_profile.get("knownExportedComponents", []):
+            if component and str(component) in raw:
+                finding["priority"] = "P3"
+                finding["status"] = "REVIEW"
+                finding["appProfileImpact"] = (
+                    "The app profile declares this exported component as expected. "
+                    "AURA downgrades it to review, but still requires validation and a narrow contract."
+                )
+                finding.setdefault("policyTrace", []).append("customer_profile.known_exported_component")
+                return
+
+    if finding.get("type") == "CLEARTEXT_TRAFFIC_ALLOWED":
+        for domain in app_profile.get("allowedCleartextDomains", []):
+            if domain and str(domain).lower() in raw.lower():
+                finding["priority"] = "INFO"
+                finding["status"] = "ACCEPTED_RISK"
+                finding["appProfileImpact"] = (
+                    f"The app profile explicitly allows cleartext for `{domain}`. "
+                    "AURA keeps it as accepted release context rather than a blocker."
+                )
+                finding.setdefault("policyTrace", []).append("customer_profile.allowed_cleartext_domain")
+                return
+
+
+def apply_accepted_risk_overrides(finding: dict[str, Any], app_profile: dict[str, Any]) -> None:
+    """Apply explicit customer decisions after all policy packs and profile downgrades."""
+
+    for accepted in app_profile.get("acceptedRisks", []):
+        if isinstance(accepted, dict) and matches_accepted_risk(finding, accepted):
+            accepted_status = str(accepted.get("status") or "ACCEPTED_RISK")
+            if accepted_status not in {"ACCEPTED_RISK", "NOT_APPLICABLE"}:
+                accepted_status = "ACCEPTED_RISK"
+            finding["status"] = accepted_status
+            finding["priority"] = "INFO"
+            finding["appProfileImpact"] = str(accepted.get("reason") or "Customer profile marks this finding as accepted risk.")
+            finding.setdefault("policyTrace", []).append(f"customer_profile.{accepted_status.lower()}")
+            return
+
+
+def apply_policy_effect(finding: dict[str, Any], effect: dict[str, Any]) -> None:
+    for source_key, target_key in (
+        ("priority", "priority"),
+        ("status", "status"),
+        ("owner", "owner"),
+        ("manualReviewRequired", "requiresManualReview"),
+        ("appProfileImpact", "appProfileImpact"),
+        ("whyItMatters", "whyItMatters"),
+        ("howToFix", "howToFix"),
+        ("acceptanceCriteria", "acceptanceCriteria"),
+        ("verification", "verificationCheck"),
+        ("verificationCheck", "verificationCheck"),
+        ("title", "title"),
+    ):
+        if source_key in effect:
+            finding[target_key] = effect[source_key]
+    if "priority" in effect and "status" not in effect:
+        finding["status"] = STATUS_BY_PRIORITY.get(finding.get("priority"), finding.get("status", "INFO"))
+
+
+def apply_policy_engine(
+    findings: list[dict[str, Any]],
+    app_profile: dict[str, Any],
+    policy_packs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    for finding in findings:
+        finding["appProfileImpact"] = default_app_profile_impact(finding.get("type", ""), app_profile)
+        for pack in policy_packs:
+            for rule in pack.get("rules", []):
+                if not rule_matches(rule, finding, app_profile):
+                    continue
+                apply_policy_effect(finding, rule.get("effect") or {})
+                finding.setdefault("policyTrace", []).append(f"{pack.get('policyPackId', 'policy')}.{rule.get('ruleId', 'rule')}")
+        apply_expected_surface_overrides(finding, app_profile)
+        apply_accepted_risk_overrides(finding, app_profile)
+    return sort_findings(findings)
 
 
 def suppress_superseded_aggregate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -427,6 +996,303 @@ def sort_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(findings, key=finding_sort_key)
 
 
+def group_sort_key(group: dict[str, Any]) -> tuple[int, int, str]:
+    return (
+        PRIORITY_ORDER.get(group.get("priority", "INFO"), 9),
+        GROUP_ORDER.get(group.get("groupId", "UNCLASSIFIED_RELEASE_REVIEW"), 99),
+        group.get("groupId", ""),
+    )
+
+
+def group_component_name(finding: dict[str, Any]) -> str:
+    raw = str((finding.get("evidence") or {}).get("rawValue") or "")
+    short_name = component_short_name(raw)
+    if short_name:
+        return short_name
+    if raw:
+        return raw
+    return str(finding.get("evidenceSubject") or finding.get("id") or "surface")
+
+
+def group_priority(findings: list[dict[str, Any]]) -> str:
+    if not findings:
+        return "INFO"
+    return sorted(
+        (finding.get("priority", "INFO") for finding in findings),
+        key=lambda priority: PRIORITY_ORDER.get(priority, 9),
+    )[0]
+
+
+def group_status(findings: list[dict[str, Any]]) -> str:
+    if not findings:
+        return "INFO"
+    return sorted(
+        (finding.get("status", "INFO") for finding in findings),
+        key=lambda status: STATUS_ORDER.get(status, 9),
+    )[0]
+
+
+def merged_recommended_review(findings: list[dict[str, Any]]) -> list[str]:
+    output: list[str] = []
+    for finding in findings:
+        classification = finding.get("componentClassification") or {}
+        for item in classification.get("recommendedReview") or []:
+            if item not in output:
+                output.append(str(item))
+    return output[:6]
+
+
+def merged_needs(findings: list[dict[str, Any]]) -> list[str]:
+    output: list[str] = []
+    for finding in findings:
+        strength = finding.get("evidenceStrength") or {}
+        for item in strength.get("needs") or []:
+            if item not in output:
+                output.append(str(item))
+    return output
+
+
+def merged_evidence_level(findings: list[dict[str, Any]]) -> str:
+    levels = []
+    for finding in findings:
+        level = (finding.get("evidenceStrength") or {}).get("level")
+        if level and level not in levels:
+            levels.append(str(level))
+    if not levels:
+        return "Unknown"
+    if len(levels) == 1:
+        return levels[0]
+    return "Mixed evidence: " + ", ".join(levels)
+
+
+def group_customer_summary(group_id: str, group_title: str, findings: list[dict[str, Any]]) -> str:
+    component_count = sum(
+        1 for finding in findings
+        if finding.get("type") == "EXPORTED_COMPONENT_WITHOUT_GUARD"
+    )
+    if group_id == "PAYMENT_ACCOUNT_FLOW_SURFACE_REVIEW":
+        return (
+            "These payment/account entry points are externally reachable and should be reviewed together because they may process callback, redirect, or account-flow input. "
+            "The current evidence identifies review targets; it does not prove a payment or authentication bypass."
+        )
+    if group_id == "APP_ROUTING_ENTRYPOINT_REVIEW":
+        return (
+            "These routing entry points can receive external navigation input and should be reviewed as one app-flow surface. "
+            "Confirm routes, hosts, parameters, and sensitive destinations are constrained before production release."
+        )
+    if group_id == "THIRD_PARTY_SDK_EXPORTED_SURFACES":
+        return (
+            "These exported SDK callback surfaces appear to come from third-party integrations and should be checked against the intended production SDK configuration. "
+            "The review should confirm the components are expected, documented, and reflected in privacy disclosures."
+        )
+    if group_id == "PREVIEW_TOOLING_RELEASE_REVIEW":
+        return (
+            "Preview or tooling components appear in the release artifact and should be removed, guarded, or explicitly justified before customer delivery. "
+            "This is a release hygiene review area, not proof of runtime abuse."
+        )
+    if group_id == "BACKUP_DATA_EXTRACTION_REVIEW":
+        return (
+            "The app backup/data extraction posture should be checked against the app profile and data sensitivity. "
+            "Sensitive tokens, caches, regulated data, and account state should be excluded or backup should be disabled."
+        )
+    if group_id == "NETWORK_TRANSPORT_REVIEW":
+        return (
+            "The release network transport configuration should be reviewed for cleartext allowances, debug-only exceptions, and scoped domain rules. "
+            "Broad production cleartext should be fixed or explicitly accepted with evidence."
+        )
+    if group_id == "WEBVIEW_CONFIGURATION_REVIEW":
+        return (
+            "The WebView configuration should be reviewed as a single browser/runtime surface. "
+            "Focus on trusted origins, JavaScript bridges, mixed content, file access, and URL handoff behavior."
+        )
+    if component_count:
+        return (
+            "Externally reachable components should be reviewed as one release-risk area rather than as isolated manifest rows. "
+            "Confirm each surface is expected, narrowly scoped, and guarded by caller/input validation where needed."
+        )
+    return (
+        f"{group_title} should be handled as a ticket-ready release review workstream with clear owner, acceptance criteria, and retest evidence."
+    )
+
+
+def group_acceptance_criteria(group_id: str, items: list[dict[str, Any]]) -> str:
+    if group_id == "PAYMENT_ACCOUNT_FLOW_SURFACE_REVIEW":
+        return (
+            "Payment/account callback surfaces are confirmed as expected; URI schemes, hosts, paths, and intent filters match documented SDK or app setup; "
+            "callback state/nonce/session validation is confirmed in source review; SDK configuration matches the production package/signing identity."
+        )
+    if group_id == "APP_ROUTING_ENTRYPOINT_REVIEW":
+        return (
+            "External routing entry points accept only documented schemes, hosts, paths, and parameters; sensitive destinations require the expected authenticated state; "
+            "unexpected routes are rejected or safely ignored."
+        )
+    if group_id == "THIRD_PARTY_SDK_EXPORTED_SURFACES":
+        return (
+            "Each SDK callback surface is expected for the production integration; documented SDK setup matches the release artifact; "
+            "callback handling is scoped to intended inputs; privacy/disclosure impact has been reviewed."
+        )
+    if group_id == "PREVIEW_TOOLING_RELEASE_REVIEW":
+        return (
+            "Preview/debug/tooling components are removed from the production artifact, non-exported, or protected by an explicit release guard with documented business justification."
+        )
+    if group_id == "BACKUP_DATA_EXTRACTION_REVIEW":
+        return (
+            "Backup/data extraction is disabled for sensitive apps or rules explicitly exclude tokens, credentials, regulated data, caches, and other sensitive local state."
+        )
+    if group_id == "NETWORK_TRANSPORT_REVIEW":
+        return (
+            "Production network security config has no broad cleartext allowance; any exception is domain-scoped, documented, and accepted in the app profile."
+        )
+    if group_id == "WEBVIEW_CONFIGURATION_REVIEW":
+        return (
+            "WebView loads only expected origins; JavaScript bridges are restricted to trusted content; file access, mixed content, and external URL handoff are explicitly reviewed."
+        )
+    if group_id == "SENSITIVE_UI_REVIEW":
+        return (
+            "Sensitive screens and actions have documented screenshot, accessibility, and obscured-touch behavior; missing controls are either fixed or marked not applicable after review."
+        )
+    first = items[0] if items else {}
+    return str(first.get("acceptanceCriteria") or "Release owner confirms the review area is fixed, accepted, or not applicable with evidence.")
+
+
+def group_verification_check(group_id: str, items: list[dict[str, Any]]) -> str:
+    if group_id in {
+        "PAYMENT_ACCOUNT_FLOW_SURFACE_REVIEW",
+        "APP_ROUTING_ENTRYPOINT_REVIEW",
+        "THIRD_PARTY_SDK_EXPORTED_SURFACES",
+        "PREVIEW_TOOLING_RELEASE_REVIEW",
+    }:
+        return (
+            "Next verification: run offline APK analysis or source review to inspect intent filters, schemes, hosts, exported flags, SDK configuration, and callback handling. "
+            "After fixes, rerun AURA and compare stable finding fingerprints."
+        )
+    if group_id == "BACKUP_DATA_EXTRACTION_REVIEW":
+        return (
+            "Inspect AndroidManifest backup settings plus backup_rules.xml/data_extraction_rules.xml, then rerun AURA/offline analysis and verify the data-persistence finding is fixed or accepted."
+        )
+    if group_id == "NETWORK_TRANSPORT_REVIEW":
+        return (
+            "Inspect AndroidManifest and network_security_config.xml for broad cleartext or debug trust exceptions, then rerun AURA/offline analysis and compare the network finding fingerprint."
+        )
+    if group_id == "WEBVIEW_CONFIGURATION_REVIEW":
+        return (
+            "Review WebView setup in source/offline analysis for JavaScript bridges, file access, mixed content, and URL loading, then rerun AURA after configuration changes."
+        )
+    first = items[0] if items else {}
+    return str(first.get("verificationCheck") or "Rerun AURA and compare stable finding fingerprints after the release owner applies or accepts the fix.")
+
+
+def report_group_id_for_finding(finding: dict[str, Any]) -> str:
+    classification = finding.get("componentClassification") or {}
+    component_class = str(classification.get("componentClass") or "")
+    kind = str((finding.get("affectedSurface") or {}).get("kind") or "")
+    if component_class in {"PAYMENT_REDIRECT", "AUTH_CALLBACK", "CUSTOMER_DATA_FLOW"}:
+        return "PAYMENT_ACCOUNT_FLOW_SURFACE_REVIEW"
+    if component_class in {"DEEPLINK_ROUTER", "WEBVIEW_ENTRYPOINT"}:
+        return "APP_ROUTING_ENTRYPOINT_REVIEW"
+    if component_class == "UNKNOWN_EXPORTED_SURFACE" and kind == "activity":
+        return "APP_ROUTING_ENTRYPOINT_REVIEW"
+    if component_class in {"SDK_CALLBACK", "PUSH_SERVICE", "ANALYTICS_RECEIVER"}:
+        return "THIRD_PARTY_SDK_EXPORTED_SURFACES"
+    if component_class == "PREVIEW_OR_TOOLING":
+        return "PREVIEW_TOOLING_RELEASE_REVIEW"
+    return str(classification.get("groupId") or "UNCLASSIFIED_RELEASE_REVIEW")
+
+
+def report_group_title(group_id: str, items: list[dict[str, Any]]) -> str:
+    classes = {
+        str((item.get("componentClassification") or {}).get("componentClass") or "")
+        for item in items
+    }
+    if group_id == "PAYMENT_ACCOUNT_FLOW_SURFACE_REVIEW":
+        if classes <= {"PAYMENT_REDIRECT"}:
+            return "Payment / financial redirect surfaces need review"
+        return "Payment / account flow entry points need review"
+    if group_id == "APP_ROUTING_ENTRYPOINT_REVIEW":
+        if "WEBVIEW_ENTRYPOINT" in classes and "DEEPLINK_ROUTER" in classes:
+            return "Deep link / WebView routing entry points need review"
+        if "WEBVIEW_ENTRYPOINT" in classes:
+            return "WebView / browser entry points need review"
+        return "Deep link / routing entry points need review"
+    if group_id == "THIRD_PARTY_SDK_EXPORTED_SURFACES":
+        return "Third-party SDK exported surfaces need review"
+    if group_id == "PREVIEW_TOOLING_RELEASE_REVIEW":
+        return "Preview/tooling components in release artifact need review"
+    return str((items[0].get("componentClassification") or {}).get("groupTitle") or group_id.replace("_", " ").title())
+
+
+def build_finding_groups(findings: list[dict[str, Any]], app_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for finding in findings:
+        grouped.setdefault(report_group_id_for_finding(finding), []).append(finding)
+
+    groups: list[dict[str, Any]] = []
+    for group_id, items in grouped.items():
+        first = items[0]
+        title = report_group_title(group_id, items)
+        priority = group_priority(items)
+        status = group_status(items)
+        needs = merged_needs(items)
+        evidence_level = merged_evidence_level(items)
+        component_items = [
+            item for item in items
+            if item.get("type") == "EXPORTED_COMPONENT_WITHOUT_GUARD"
+        ]
+        affected_components = []
+        for finding in component_items:
+            component_name = group_component_name(finding)
+            if component_name not in affected_components:
+                affected_components.append(component_name)
+        seed = group_id + ":" + ":".join(sorted(str(item.get("fingerprint")) for item in items))
+        groups.append(
+            {
+                "groupId": group_id,
+                "id": f"AURA-GRP-{hashlib.sha256(seed.encode()).hexdigest()[:8].upper()}",
+                "title": title,
+                "status": status,
+                "priority": priority,
+                "findingIds": [str(item.get("id")) for item in items],
+                "findingFingerprints": [str(item.get("fingerprint")) for item in items],
+                "findingCount": len(items),
+                "componentClass": ", ".join(sorted({
+                    str((item.get("componentClassification") or {}).get("componentClass") or "n/a")
+                    for item in items
+                })),
+                "sdk": ", ".join(sorted({
+                    str((item.get("componentClassification") or {}).get("sdk"))
+                    for item in items
+                    if (item.get("componentClassification") or {}).get("sdk")
+                })) or None,
+                "componentCount": len(affected_components),
+                "affectedComponents": affected_components,
+                "evidenceStrength": {
+                    "level": evidence_level,
+                    "exploitability": "Not proven",
+                    "needs": needs,
+                    "summary": (
+                        f"{evidence_level}; exploitability not proven; needs: "
+                        f"{' / '.join(needs) if needs else 'manual review'}."
+                    ),
+                },
+                "customerSummary": group_customer_summary(group_id, title, items),
+                "recommendedReview": merged_recommended_review(items),
+                "acceptanceCriteria": group_acceptance_criteria(group_id, items),
+                "groupAcceptanceCriteria": group_acceptance_criteria(group_id, items),
+                "verificationCheck": group_verification_check(group_id, items),
+                "groupVerificationCheck": group_verification_check(group_id, items),
+                "owner": first.get("owner"),
+                "manualReviewRequired": any(item.get("requiresManualReview") is True for item in items),
+                "appProfileImpact": default_app_profile_impact(first.get("type", ""), app_profile),
+                "sourceFindingTypes": sorted({
+                    str((item.get("evidence") or {}).get("sourceFindingType"))
+                    for item in items
+                    if (item.get("evidence") or {}).get("sourceFindingType")
+                }),
+            }
+        )
+    return sorted(groups, key=group_sort_key)
+
+
 def release_status(priority_counts: Counter[str]) -> dict[str, Any]:
     p1 = priority_counts.get("P1", 0)
     p2 = priority_counts.get("P2", 0)
@@ -460,14 +1326,68 @@ def release_status(priority_counts: Counter[str]) -> dict[str, Any]:
     }
 
 
+def ratio(numerator: int, denominator: int) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round(numerator / denominator, 4)
+
+
+def policy_quality_metrics(
+    findings: list[dict[str, Any]],
+    priority_counts: Counter[str],
+    groups: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    customer_visible = [
+        finding for finding in findings
+        if finding.get("status") in CUSTOMER_VISIBLE_STATUSES
+    ]
+    actionable = [
+        finding for finding in customer_visible
+        if finding.get("howToFix") and finding.get("verificationCheck") and finding.get("acceptanceCriteria")
+    ]
+    manual_review = [
+        finding for finding in customer_visible
+        if finding.get("requiresManualReview") is True
+    ]
+    accepted = [
+        finding for finding in findings
+        if finding.get("status") == "ACCEPTED_RISK"
+    ]
+    not_applicable = [
+        finding for finding in findings
+        if finding.get("status") == "NOT_APPLICABLE"
+    ]
+    visible_groups = [
+        group for group in (groups or [])
+        if group.get("status") in CUSTOMER_VISIBLE_STATUSES
+    ]
+    largest_group = max((int(group.get("findingCount") or 0) for group in visible_groups), default=0)
+    return {
+        "blockerDensity": priority_counts.get("P1", 0),
+        "customerVisibleFindingCount": len(customer_visible),
+        "customerVisibleReviewAreaCount": len(visible_groups),
+        "largestReviewAreaSize": largest_group,
+        "groupedFindingReduction": max(len(customer_visible) - len(visible_groups), 0),
+        "actionableRate": ratio(len(actionable), len(customer_visible)),
+        "manualReviewRate": ratio(len(manual_review), len(customer_visible)),
+        "acceptedRiskRecurrence": len(accepted),
+        "notApplicableCount": len(not_applicable),
+        "infoCount": sum(1 for finding in findings if finding.get("priority") == "INFO"),
+    }
+
+
 def build_audit(
     export: dict[str, Any],
     *,
     offline_analysis: dict[str, Any] | None = None,
+    app_profile: dict[str, Any] | Path | str | None = None,
+    policy_paths: list[Path | str] | None = None,
 ) -> dict[str, Any]:
     assessments = export.get("assessments") or []
     if not assessments:
         raise ValueError("App-owner audit requires at least one scoped assessment")
+    profile = load_app_profile(app_profile)
+    policy_packs = load_policy_packs(profile, policy_paths)
     assessment = assessments[0]
     target_package = package_name(assessment)
     on_device = [
@@ -476,37 +1396,56 @@ def build_audit(
     ]
     offline_apk = offline_apk_for_package(offline_analysis, target_package)
     raw_findings: list[dict[str, Any]] = []
-    raw_findings.extend(
-        audit_finding_from_source(
-            package_name_value=target_package,
-            source="ON_DEVICE",
-            source_finding=finding,
-        )
-        for finding in on_device
-    )
-    if offline_apk:
+    for finding in on_device:
         raw_findings.extend(
             audit_finding_from_source(
                 package_name_value=target_package,
-                source="OFFLINE_APK_ANALYZER",
-                source_finding=finding,
+                source="ON_DEVICE",
+                source_finding=expanded,
             )
-            for finding in offline_apk.get("findings", [])
+            for expanded in expand_source_finding(finding)
         )
+    if offline_apk:
+        for finding in offline_apk.get("findings", []):
+            raw_findings.extend(
+                audit_finding_from_source(
+                    package_name_value=target_package,
+                    source="OFFLINE_APK_ANALYZER",
+                    source_finding=expanded,
+                )
+                for expanded in expand_source_finding(finding)
+            )
     findings = merge_duplicate_findings(raw_findings)
-    counts = Counter(finding["priority"] for finding in findings)
+    findings = apply_policy_engine(findings, profile, policy_packs)
+    finding_groups = build_finding_groups(findings, profile)
+    actionable_findings = [
+        finding for finding in findings
+        if finding.get("status") in ACTIONABLE_STATUSES and finding.get("priority") != "INFO"
+    ]
+    counts = Counter(finding["priority"] for finding in actionable_findings)
+    status_counts = Counter(finding.get("status", "INFO") for finding in findings)
     return {
         "schemaVersion": 1,
         "auditEngineVersion": AUDIT_ENGINE_VERSION,
+        "policyPackVersion": DEFAULT_POLICY_PACK_VERSION,
         "targetPackage": target_package,
+        "appProfile": profile,
+        "policyPacksApplied": [
+            pack.get("policyPackId", "unknown") for pack in policy_packs
+        ],
         "releaseStatus": release_status(counts),
         "priorityCounts": {
             "P1": counts.get("P1", 0),
             "P2": counts.get("P2", 0),
             "P3": counts.get("P3", 0),
-            "INFO": counts.get("INFO", 0),
+            "INFO": sum(1 for finding in findings if finding.get("priority") == "INFO"),
         },
+        "statusCounts": dict(status_counts),
+        "policyQualityMetrics": policy_quality_metrics(findings, counts, finding_groups),
+        "findingGroups": finding_groups,
+        "releaseRiskGroups": finding_groups,
         "findings": findings,
+        "releaseRiskFindings": findings,
         "threatContext": {
             "decision": (assessment.get("decision") or {}).get("color"),
             "title": (assessment.get("decision") or {}).get("title"),
@@ -523,6 +1462,7 @@ def compare_audits(previous: dict[str, Any] | None, current: dict[str, Any]) -> 
             "fixed": [],
             "remaining": [],
             "new": [],
+            "resolutionRate": 0.0,
         }
     previous_by_fp = {finding["fingerprint"]: finding for finding in previous.get("findings", [])}
     current_by_fp = {finding["fingerprint"]: finding for finding in current.get("findings", [])}
@@ -534,6 +1474,7 @@ def compare_audits(previous: dict[str, Any] | None, current: dict[str, Any]) -> 
         "fixed": fixed,
         "remaining": remaining,
         "new": new,
+        "resolutionRate": ratio(len(fixed), len(fixed) + len(remaining)),
     }
 
 
@@ -543,12 +1484,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("export", type=Path)
     parser.add_argument("--offline-analysis", type=Path)
+    parser.add_argument("--app-profile", type=Path)
+    parser.add_argument("--policy-pack", action="append", type=Path, dest="policy_packs")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
     export = json.loads(args.export.read_text())
     offline = json.loads(args.offline_analysis.read_text()) if args.offline_analysis else None
-    audit = build_audit(export, offline_analysis=offline)
+    app_profile = json.loads(args.app_profile.read_text()) if args.app_profile else None
+    audit = build_audit(
+        export,
+        offline_analysis=offline,
+        app_profile=app_profile,
+        policy_paths=args.policy_packs,
+    )
     payload = json.dumps(audit, indent=2, sort_keys=True) + "\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)

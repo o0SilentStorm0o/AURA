@@ -1,0 +1,33 @@
+{
+  "policyPackId": "sdk_library_policy",
+  "version": "0.1.0",
+  "description": "Context rules for SDK/library artifacts and demo host apps.",
+  "rules": [
+    {
+      "ruleId": "sdk_exported_surface_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "SDK owner",
+        "manualReviewRequired": true,
+        "appProfileImpact": "SDK/library artifacts may expose integration surfaces; document the public contract and caller validation."
+      }
+    },
+    {
+      "ruleId": "sdk_third_party_surface_info",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "INFO",
+        "status": "INFO",
+        "owner": "SDK owner",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For SDK/library delivery, downstream disclosure and dependency documentation are the main review focus."
+      }
+    }
+  ]
+}

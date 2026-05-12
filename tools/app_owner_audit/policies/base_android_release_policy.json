@@ -1,0 +1,117 @@
+{
+  "policyPackId": "base_android_release_policy",
+  "version": "0.1.0",
+  "description": "Baseline Android release-risk rules applied to every app-owner audit.",
+  "rules": [
+    {
+      "ruleId": "exported_activity_default_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "activity"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Exported activities are common for launch, browser, SDK, and deep-link flows. AURA treats unguarded non-launcher activities as review items unless profile or name context makes them more sensitive."
+      }
+    },
+    {
+      "ruleId": "exported_sensitive_flow_activity_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "activity",
+        "rawContains": ["auth", "payment", "checkout", "redirect", "callback", "token", "webview", "deeplink", "link"]
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "The exported activity name suggests auth, payment, redirect, WebView, or deep-link behavior. Validate caller/input handling and keep the manifest filter narrow."
+      }
+    },
+    {
+      "ruleId": "exported_debug_or_preview_activity_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "activity",
+        "rawContains": ["preview", "playground", "tooling", "debug"]
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "The exported activity name suggests preview, playground, tooling, or debug functionality. Confirm it belongs in the release artifact or remove it."
+      }
+    },
+    {
+      "ruleId": "exported_provider_default_blocker",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "provider"
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "An unguarded exported provider is a release blocker by default because providers often expose structured app data or state-changing operations."
+      }
+    },
+    {
+      "ruleId": "exported_service_or_receiver_default_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "External service/receiver entry points can be legitimate, but an unguarded release candidate should be fixed or justified before production."
+      }
+    },
+    {
+      "ruleId": "cleartext_default_should_fix",
+      "when": {
+        "evidenceType": "CLEARTEXT_TRAFFIC_ALLOWED"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "appProfileImpact": "Broad cleartext allowance should be fixed before production unless the app profile explicitly scopes and accepts it."
+      }
+    },
+    {
+      "ruleId": "backup_default_should_fix",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Backup/data extraction behavior should be explicit before release, especially if the app stores user state."
+      }
+    },
+    {
+      "ruleId": "third_party_sdk_privacy_review",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "INFO",
+        "status": "INFO",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Third-party SDKs are not automatically bad; they are a privacy and disclosure review surface."
+      }
+    }
+  ]
+}

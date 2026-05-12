@@ -53,9 +53,15 @@ AURA uses two flavor dimensions:
   role+provenance, temporal, and full AURA baseline metrics outside the Android
   app.
 - App-owner release-risk audit engine that converts AURA/offline analyzer
-  evidence into a CTO-facing release checklist: top fix plan, P1/P2/P3/INFO
-  findings, acceptance criteria, verification checks, owners, and stable retest
-  fingerprints.
+  evidence into a policy-driven CTO-facing release checklist: app profile,
+  policy ladder, additive policy packs, accepted risks, component
+  classification, grouped top review areas, evidence-strength caveats, top fix
+  plan, P1/P2/P3/INFO findings, status, acceptance criteria, verification
+  checks, owners, policy-quality metrics, and stable retest fingerprints.
+- Optional host-side LLM/RAG summary layer under `tools/llm_summary/`. It uses
+  controlled AURA docs/templates, optional Qdrant retrieval, Ollama embeddings,
+  and optional local Ollama wording, but cannot create findings or change
+  policy decisions.
 - Report generator for:
   - `device_expert` reports,
   - `app_owner` release-risk reports,
@@ -67,6 +73,9 @@ AURA uses two flavor dimensions:
   - `minimal_support`.
 - Public-demo tooling for non-invasive Google Play app teasers under
   `tools/public_demo/`.
+- Real-world validation harness under `tools/real_world_validation/` that
+  generates target app-owner reports from public-app scans and scores whether
+  findings are valuable, context-dependent, noisy, or good teaser candidates.
 - Harmless emulator fixture apps plus an ADB scenario runner for controlled
   abuse, abstention, role-normalization, and defensive-posture tests.
 
@@ -117,10 +126,53 @@ python3 tools/report_generator/generate_report.py \
   artifacts/scenario_runner/aura-last-scan.json \
   --report-type app_owner \
   --target-package com.example.app \
+  --app-profile tools/app_owner_audit/profiles/fintech_high_sensitivity.example.json \
   --offline-analysis artifacts/scenario_runner/offline-apk-analysis.json \
   --out-dir artifacts/reports \
   --basename aura-app-owner-release-risk
 ```
+
+Generate deterministic RAG-backed wording for an existing app-owner audit:
+
+```bash
+python3 tools/llm_summary/llm_summary.py \
+  artifacts/reports/aura-app-owner-audit.json \
+  --out artifacts/reports/aura-group-summary.json \
+  --llm-mode off
+```
+
+Run the optional local LLM/RAG path. The supported local setup is native macOS
+Ollama with Metal acceleration, `qwen2.5:3b`, and Dockerized Qdrant bound to
+localhost:
+
+```bash
+brew install ollama
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_HOST=127.0.0.1:11434 ollama serve
+ollama pull qwen2.5:3b
+ollama pull nomic-embed-text
+
+docker start aura-qdrant || docker run -d --name aura-qdrant -p 127.0.0.1:6333:6333 qdrant/qdrant
+
+python3 tools/llm_summary/llm_summary.py \
+  artifacts/reports/aura-app-owner-audit.json \
+  --out artifacts/reports/aura-group-summary.llm-rag.json \
+  --llm-mode strict \
+  --local-llm-url http://localhost:11434 \
+  --model qwen2.5:3b \
+  --qdrant-url http://localhost:6333 \
+  --embedding-url http://localhost:11434 \
+  --embedding-model nomic-embed-text \
+  --embedding-mode ollama \
+  --llm-timeout-seconds 180
+```
+
+Model pulls need network access during setup. Report generation can then run
+locally/offline against already pulled models and the local Qdrant store.
+
+The LLM/RAG layer is a wording layer only. In strict mode it works
+group-by-group, validates all `groupId`, `findingIds`, and `docIds`, and falls
+back to templates when the model times out or tries to invent unsupported
+content.
 
 See:
 
@@ -133,6 +185,10 @@ See:
 - [development_status.md](docs/research/development_status.md)
 - [emulator_scenarios.md](docs/testing/emulator_scenarios.md)
 - [report_workflow.md](docs/commercial/report_workflow.md)
+- [app_profile_intake.md](docs/commercial/app_profile_intake.md)
+- [pre_send_triage_checklist.md](docs/commercial/pre_send_triage_checklist.md)
 - [public demo workflow](tools/public_demo/README.md)
+- [real-world validation](tools/real_world_validation/README.md)
 - [report generator](tools/report_generator/README.md)
+- [LLM/RAG group summary](tools/llm_summary/README.md)
 - [export redactor](tools/export_redactor/README.md)
