@@ -76,6 +76,10 @@ AURA uses two flavor dimensions:
 - Real-world validation harness under `tools/real_world_validation/` that
   generates target app-owner reports from public-app scans and scores whether
   findings are valuable, context-dependent, noisy, or good teaser candidates.
+- Local AURA Studio under `tools/aura_studio/`, a localhost web workbench for
+  pulling exports, selecting a target package, editing the app profile, running
+  the app-owner audit engine, invoking native Ollama/Qdrant LLM/RAG wording,
+  previewing reports, and opening generated artifacts.
 - Harmless emulator fixture apps plus an ADB scenario runner for controlled
   abuse, abstention, role-normalization, and defensive-posture tests.
 
@@ -191,4 +195,5 @@ See:
 - [real-world validation](tools/real_world_validation/README.md)
 - [report generator](tools/report_generator/README.md)
 - [LLM/RAG group summary](tools/llm_summary/README.md)
+- [AURA Studio](tools/aura_studio/README.md)
 - [export redactor](tools/export_redactor/README.md)

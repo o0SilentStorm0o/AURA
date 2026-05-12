@@ -92,6 +92,10 @@ This document separates what exists in the current Research MVP from planned wor
 - Native Ollama/Qdrant LLM/RAG report wording has been smoke-tested on Bikeflip
   and Bistro app-owner audits. `qwen2.5:3b` validated successfully; smaller
   local models were faster but failed strict schema validation in this use case.
+- Local AURA Studio workbench under `tools/aura_studio/`. It exposes health
+  checks for ADB/native Ollama/Qdrant, package selection from an export, minimal
+  app profile editing, app-owner audit execution, optional LLM/RAG summary
+  generation, report preview, and links to generated artifacts.
 
 ## Not Yet Implemented
 
@@ -99,8 +103,9 @@ This document separates what exists in the current Research MVP from planned wor
 - Automated user action launchers for settings/remediation; current UI explains
   actions but does not deep-link into Android settings screens.
 - Automated PDF rendering beyond browser print/save-as-PDF from generated HTML.
-- Local AURA Studio UI for non-CLI report orchestration; current host-side
-  workflow is scriptable but still command-line driven.
+- A full customer/project database, multi-user collaboration, and automated PDF
+  rendering inside Studio. The current Studio is intentionally local,
+  single-operator, and artifact-folder based.
 - Automated Play Store installation/download orchestration for public demos;
   the current workflow opens Play Store targets and expects manual install with
   a test Google account.

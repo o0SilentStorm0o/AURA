@@ -226,6 +226,24 @@ Use the summary to decide whether a target is:
 - a stress case requiring manual triage,
 - or evidence that policy tuning/offline APK analysis needs more work.
 
+## AURA Studio
+
+For day-to-day report generation, use the local Studio workbench instead of
+manually chaining every CLI command:
+
+```bash
+python3 tools/aura_studio/server.py
+```
+
+Studio runs only on localhost by default. It checks ADB, native Ollama
+`qwen2.5:3b`, Ollama embeddings, and Qdrant; loads target packages from an AURA
+export; captures the app profile; runs the app-owner audit engine; optionally
+generates strict LLM/RAG group wording; and previews the generated report.
+
+Studio does not change the product contract: `ReleaseRiskFinding` and
+`FindingGroup` remain the source of truth, and every customer-facing report
+still needs the pre-send triage checklist before outreach or delivery.
+
 ## Public-Surface Teaser
 
 For first contact, use a public-surface teaser rather than a full audit.

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AURA Studio</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="mark">A</div>
+          <div>
+            <h1>AURA Studio</h1>
+            <p>Local report workbench</p>
+          </div>
+        </div>
+        <div class="status-stack" id="health">
+          <div class="status-row"><span class="dot muted"></span><span>Checking local stack...</span></div>
+        </div>
+        <nav class="steps">
+          <a href="#source">Source</a>
+          <a href="#profile">Profile</a>
+          <a href="#run">Run</a>
+          <a href="#findings">Findings</a>
+          <a href="#preview">Preview</a>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <section class="topbar">
+          <div>
+            <p class="eyebrow">App-owner release risk</p>
+            <h2>Build a CTO-readable Android report</h2>
+          </div>
+          <button id="refreshHealth" class="ghost-button">Refresh health</button>
+        </section>
+
+        <section class="panel" id="source">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Step 1</p>
+              <h3>Source</h3>
+            </div>
+            <button id="pullExport" class="secondary-button">Pull latest AURA export</button>
+          </div>
+          <div class="grid two">
+            <label>
+              AURA export JSON
+              <input id="exportPath" value="artifacts/real_world_validation/live/aura-last-scan.json">
+            </label>
+            <label>
+              Optional offline APK analysis
+              <input id="offlineAnalysisPath" placeholder="artifacts/scenario_runner/offline-apk-analysis.json">
+            </label>
+          </div>
+          <div class="target-row">
+            <button id="loadPackages" class="primary-button">Load packages</button>
+            <select id="targetPackage"></select>
+          </div>
+          <p class="hint">Studio reads files inside this AURA workspace and keeps report artifacts under <code>artifacts/studio</code>.</p>
+        </section>
+
+        <section class="panel" id="profile">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Step 2</p>
+              <h3>App Profile</h3>
+            </div>
+            <select id="profilePreset"></select>
+          </div>
+          <div class="grid three">
+            <label>
+              Category
+              <select id="appCategory">
+                <option>ecommerce</option>
+                <option>fintech</option>
+                <option>health</option>
+                <option>public_info</option>
+                <option>internal_enterprise</option>
+                <option>sdk_library</option>
+                <option>utility</option>
+              </select>
+            </label>
+            <label>
+              Data sensitivity
+              <select id="dataSensitivity">
+                <option>medium</option>
+                <option>low</option>
+                <option>high</option>
+                <option>regulated</option>
+              </select>
+            </label>
+            <label>
+              Release stage
+              <select id="releaseStage">
+                <option>production_candidate</option>
+                <option>production</option>
+                <option>beta</option>
+                <option>internal_debug</option>
+                <option>debug</option>
+              </select>
+            </label>
+          </div>
+          <div class="toggles">
+            <label><input type="checkbox" id="authFlow" checked> Auth flow</label>
+            <label><input type="checkbox" id="payments" checked> Payments</label>
+            <label><input type="checkbox" id="webviewUsageExpected" checked> WebView expected</label>
+            <label><input type="checkbox" id="externalIntegrationsExpected" checked> External integrations</label>
+          </div>
+          <div class="grid two">
+            <label>
+              Allowed cleartext domains
+              <input id="allowedCleartextDomains" placeholder="10.0.2.2, localhost">
+            </label>
+            <label>
+              Known exported components
+              <input id="knownExportedComponents" placeholder="com.example.PaymentCallbackActivity">
+            </label>
+          </div>
+        </section>
+
+        <section class="panel" id="run">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Step 3</p>
+              <h3>Run Audit</h3>
+            </div>
+            <button id="runAudit" class="primary-button">Run audit and report</button>
+          </div>
+          <div class="grid three">
+            <label>
+              Report basename
+              <input id="basename" value="aura-studio-report">
+            </label>
+            <label>
+              Privacy mode
+              <select id="privacyMode">
+                <option value="redacted_expert">redacted_expert</option>
+                <option value="full_research">full_research</option>
+                <option value="minimal_support">minimal_support</option>
+              </select>
+            </label>
+            <label class="checkline">
+              <input type="checkbox" id="llmEnabled" checked>
+              Use native Ollama LLM/RAG
+            </label>
+          </div>
+          <div id="runLog" class="log">Ready.</div>
+        </section>
+
+        <section class="result-grid" id="findings">
+          <div class="panel compact">
+            <p class="eyebrow">Release</p>
+            <div id="readiness" class="readiness muted">No audit yet</div>
+            <div id="counts" class="metric-grid"></div>
+          </div>
+          <div class="panel compact">
+            <p class="eyebrow">LLM/RAG</p>
+            <div id="llmStatus" class="readiness muted">Not run</div>
+            <p id="llmDetail" class="hint"></p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Step 4</p>
+              <h3>Top Review Areas</h3>
+            </div>
+          </div>
+          <div id="groups" class="group-list empty">Run an audit to see grouped review areas.</div>
+        </section>
+
+        <section class="panel" id="preview">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Step 5</p>
+              <h3>Report Preview</h3>
+            </div>
+            <a id="openReport" class="secondary-button disabled" href="#" target="_blank" rel="noreferrer">Open report</a>
+          </div>
+          <iframe id="reportFrame" title="AURA report preview"></iframe>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
