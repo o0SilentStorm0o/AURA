@@ -79,7 +79,8 @@ AURA uses two flavor dimensions:
 - Local AURA Studio under `tools/aura_studio/`, a localhost web workbench for
   pulling exports, selecting a target package, editing the app profile, running
   the app-owner audit engine, invoking native Ollama/Qdrant LLM/RAG wording,
-  previewing reports, and opening generated artifacts.
+  previewing reports, and opening generated artifacts. Studio is the preferred
+  human-friendly operator UI for day-to-day app-owner report generation.
 - Harmless emulator fixture apps plus an ADB scenario runner for controlled
   abuse, abstention, role-normalization, and defensive-posture tests.
 
@@ -92,6 +93,26 @@ defensive-posture summary so threat decisions are not conflated with app
 hardening findings.
 
 ## Common Workflows
+
+Start the local AURA Studio workbench:
+
+```bash
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_HOST=127.0.0.1:11434 ollama serve
+docker start aura-qdrant || docker run -d --name aura-qdrant -p 127.0.0.1:6333:6333 qdrant/qdrant
+python3 tools/aura_studio/server.py --host 127.0.0.1 --port 8765
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8765
+```
+
+Studio runs on the MacBook host. The Android app/emulator is still the no-root
+collector; Studio pulls or loads an AURA JSON export, captures the app/customer
+profile, runs the app-owner audit engine, optionally invokes strict local
+LLM/RAG wording, and previews the generated HTML report. Generated artifacts are
+written under `artifacts/studio/runs/`.
 
 Run the emulator-backed controlled scenarios:
 
@@ -176,7 +197,9 @@ locally/offline against already pulled models and the local Qdrant store.
 The LLM/RAG layer is a wording layer only. In strict mode it works
 group-by-group, validates all `groupId`, `findingIds`, and `docIds`, and falls
 back to templates when the model times out or tries to invent unsupported
-content.
+content. If an audit has no release-risk finding groups, the LLM path returns
+`rule_based_template_no_review_areas`; this is a valid "nothing to summarize"
+state, not an LLM failure.
 
 See:
 

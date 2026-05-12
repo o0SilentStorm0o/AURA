@@ -36,7 +36,7 @@ ollama pull nomic-embed-text
 Start Studio:
 
 ```bash
-python3 tools/aura_studio/server.py
+python3 tools/aura_studio/server.py --host 127.0.0.1 --port 8765
 ```
 
 Then open:
@@ -59,6 +59,33 @@ What the UI can do:
 - preview the generated HTML report and show the release status, counts, and
   top review areas.
 
+Recommended operator flow:
+
+1. Start native Ollama and local Qdrant.
+2. Start Studio and confirm the health panel is green for ADB, Ollama,
+   embeddings, and Qdrant.
+3. Pull the latest AURA export from the emulator or load an existing export.
+4. Select the target package.
+5. Pick or edit the app profile: category, sensitivity, release stage, expected
+   auth/payment/WebView/integration behavior, known exported components, and
+   cleartext exceptions.
+6. Run the audit with LLM enabled for customer-facing wording, or disabled for
+   deterministic template wording.
+7. Review the generated HTML report, Markdown report, audit JSON, and group
+   summary JSON before sending anything to a customer.
+
+LLM/RAG status meanings:
+
+- `Local LLM validated`: native Ollama returned schema-valid wording and strict
+  validation accepted it.
+- `Template summary`: deterministic wording was used, usually because LLM was
+  disabled.
+- `Template fallback after LLM error` or `Template fallback after invalid LLM`:
+  the audit/report is still usable, but the LLM wording was rejected or timed
+  out and the deterministic template was used.
+- `No review areas to summarize`: the app-owner audit generated no release-risk
+  finding groups. This is a valid PASS/no-findings state, not an LLM failure.
+
 Design constraints:
 
 - localhost only by default,
@@ -66,6 +93,15 @@ Design constraints:
 - no frontend build step,
 - no LLM decisions: policy findings remain owned by the audit engine,
 - artifacts are written under `artifacts/studio/runs/`.
+
+Current product boundary:
+
+- Studio is an operator workbench, not the Android app UI.
+- Studio does not install Google Play apps automatically.
+- Studio does not run root, Frida, MITM, or exploit checks.
+- Studio does not replace the pre-send triage checklist. Every customer-facing
+  report still needs human review for tone, duplicates, context, and P1
+  calibration.
 
 This is intentionally a small operator UI. It should make the report workflow
 pleasant without hiding the underlying evidence, policy, and retest artifacts.

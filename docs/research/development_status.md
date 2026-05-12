@@ -95,7 +95,11 @@ This document separates what exists in the current Research MVP from planned wor
 - Local AURA Studio workbench under `tools/aura_studio/`. It exposes health
   checks for ADB/native Ollama/Qdrant, package selection from an export, minimal
   app profile editing, app-owner audit execution, optional LLM/RAG summary
-  generation, report preview, and links to generated artifacts.
+  generation, report preview, and links to generated artifacts. Studio is
+  localhost-only by default and writes report runs under `artifacts/studio/runs/`.
+  It now treats audits with no finding groups as a valid
+  `rule_based_template_no_review_areas` state instead of surfacing a false LLM
+  failure.
 
 ## Not Yet Implemented
 

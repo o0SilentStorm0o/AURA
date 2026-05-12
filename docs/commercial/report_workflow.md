@@ -240,6 +240,31 @@ Studio runs only on localhost by default. It checks ADB, native Ollama
 export; captures the app profile; runs the app-owner audit engine; optionally
 generates strict LLM/RAG group wording; and previews the generated report.
 
+Recommended Studio flow:
+
+1. Start the local stack:
+
+   ```bash
+   OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_HOST=127.0.0.1:11434 ollama serve
+   docker start aura-qdrant || docker run -d --name aura-qdrant -p 127.0.0.1:6333:6333 qdrant/qdrant
+   python3 tools/aura_studio/server.py --host 127.0.0.1 --port 8765
+   ```
+
+2. Pull or load the latest AURA export.
+3. Select the target package.
+4. Fill the app profile before judging priorities.
+5. Run the audit and inspect the review areas.
+6. Open the generated HTML/Markdown report and audit JSON from
+   `artifacts/studio/runs/`.
+7. Run the pre-send triage checklist before sending a teaser or customer report.
+
+LLM status should be interpreted conservatively. `local_llm_validated` means the
+wording passed strict schema/reference/copy validation. Template fallback means
+the report is still generated from deterministic policy findings. The
+`rule_based_template_no_review_areas` status means there were no release-risk
+finding groups to summarize; this is a valid no-review-area state, not a model
+failure.
+
 Studio does not change the product contract: `ReleaseRiskFinding` and
 `FindingGroup` remain the source of truth, and every customer-facing report
 still needs the pre-send triage checklist before outreach or delivery.

@@ -87,6 +87,11 @@ slower on small local models, but safer for large real-world apps: a timeout or
 invalid model response for one group can fall back to the deterministic template
 without allowing the LLM to invent group IDs, finding IDs, evidence, or severity.
 
+If an app-owner audit contains no `findingGroups`, the tool returns
+`rule_based_template_no_review_areas` with `accepted=true` and
+`fallbackUsed=false`. That means there was no customer-visible release-risk
+area to summarize; it is not an Ollama or Qdrant failure.
+
 Prompt-injection and product-copy guardrails:
 
 - app labels, package names, component names, evidence strings, and retrieved
