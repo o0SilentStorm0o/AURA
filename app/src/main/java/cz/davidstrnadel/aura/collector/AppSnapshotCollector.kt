@@ -99,7 +99,7 @@ class AppSnapshotCollector(private val context: Context) {
             collectedAt = collectedAt,
             apiLevel = Build.VERSION.SDK_INT,
             androidVersion = Build.VERSION.RELEASE.orEmpty(),
-            securityPatchLevel = if (Build.VERSION.SDK_INT >= 23) Build.VERSION.SECURITY_PATCH.orEmpty() else "unknown",
+            securityPatchLevel = Build.VERSION.SECURITY_PATCH.orEmpty(),
             collectorVersion = BuildConfig.COLLECTOR_VERSION,
             flavor = "${BuildConfig.AURA_DISTRIBUTION_FLAVOR}/${BuildConfig.AURA_CAPABILITY_FLAVOR}",
             deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
@@ -147,13 +147,17 @@ class AppSnapshotCollector(private val context: Context) {
 
     @Suppress("DEPRECATION")
     private fun installedPackages(): List<PackageInfo> {
+        val signingFlag = if (Build.VERSION.SDK_INT >= 28) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
         val flags = PackageManager.GET_PERMISSIONS or
             PackageManager.GET_ACTIVITIES or
             PackageManager.GET_SERVICES or
             PackageManager.GET_RECEIVERS or
             PackageManager.GET_PROVIDERS or
-            PackageManager.GET_SIGNATURES or
-            PackageManager.GET_SIGNING_CERTIFICATES
+            signingFlag
         return if (Build.VERSION.SDK_INT >= 33) {
             packageManager.getInstalledPackages(PackageManager.PackageInfoFlags.of(flags.toLong()))
         } else {
