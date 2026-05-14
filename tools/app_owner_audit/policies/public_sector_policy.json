@@ -1,0 +1,75 @@
+{
+  "policyPackId": "public_sector_policy",
+  "version": "0.1.0",
+  "description": "Context rules for official public-sector apps that mainly publish public records, agendas, decisions, or civic information.",
+  "rules": [
+    {
+      "ruleId": "public_sector_exported_provider_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "provider"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Public-sector apps may publish public records, but an exported provider still needs an intentional public contract. Verify it cannot expose local cache, identifiers, preferences, or non-public state."
+      }
+    },
+    {
+      "ruleId": "public_sector_exported_service_receiver_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For public-sector information apps, exported services or receivers are usually review items unless they process private user data, authentication, payments, or privileged device actions."
+      }
+    },
+    {
+      "ruleId": "public_sector_unexpected_sdk_should_fix",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE",
+        "externalIntegrationsExpected": false
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "The profile says external integrations are not expected. In an official public-sector app, third-party SDKs deserve explicit justification, privacy review, and disclosure."
+      }
+    },
+    {
+      "ruleId": "public_sector_sdk_review",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Public-sector apps should be conservative with third-party SDKs. Confirm necessity, data sharing, legal basis, and disclosure even when the content itself is public."
+      }
+    },
+    {
+      "ruleId": "public_sector_backup_review",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For public-sector information apps without login or payments, backup is normally a review item, not an automatic blocker. Confirm that only public cache or harmless preferences are stored."
+      }
+    }
+  ]
+}

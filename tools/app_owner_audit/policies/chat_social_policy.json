@@ -1,0 +1,74 @@
+{
+  "policyPackId": "chat_social_policy",
+  "version": "0.1.0",
+  "description": "Context rules for chat, messaging, community, and social apps with user-generated content or account identity.",
+  "rules": [
+    {
+      "ruleId": "chat_social_exported_provider_blocker",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "provider"
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Chat/social apps often store user identity, messages, contacts, media references, or session state. An unguarded exported provider is a blocker until data exposure is ruled out."
+      }
+    },
+    {
+      "ruleId": "chat_social_deeplink_should_fix",
+      "when": {
+        "evidenceType": "DEEPLINK_ACCEPTS_UNTRUSTED_INPUT"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Deep links in chat/social apps can route to profiles, messages, invites, groups, or shared content. Validate parameters and authorization before release."
+      }
+    },
+    {
+      "ruleId": "chat_social_exported_service_receiver_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Messaging, notification, invite, sync, and share surfaces are common in chat/social apps, but exported unguarded services or receivers need a narrow caller contract."
+      }
+    },
+    {
+      "ruleId": "chat_social_backup_should_fix",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Chat/social apps may store profile state, message cache, contact metadata, media references, or tokens. Backup/data extraction needs explicit scoping before release."
+      }
+    },
+    {
+      "ruleId": "chat_social_sdk_privacy_review",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Analytics, ads, crash, and social SDKs are common in chat/social apps, but consent, disclosures, and data-safety declarations still need review."
+      }
+    }
+  ]
+}

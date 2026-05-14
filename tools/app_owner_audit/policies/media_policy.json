@@ -1,0 +1,74 @@
+{
+  "policyPackId": "media_policy",
+  "version": "0.1.0",
+  "description": "Context rules for media, news, streaming, and public-content apps.",
+  "rules": [
+    {
+      "ruleId": "media_exported_provider_should_fix",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "provider"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Media apps often expose public content, but an exported provider still needs an explicit public API contract and must not leak subscriptions, history, bookmarks, or cached account state."
+      }
+    },
+    {
+      "ruleId": "media_exported_service_receiver_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Media playback, sharing, notifications, widgets, and cast integrations can legitimately expose services or receivers. AURA keeps them visible for contract review instead of treating them as automatically critical."
+      }
+    },
+    {
+      "ruleId": "media_webview_deeplink_should_fix",
+      "when": {
+        "evidenceType": "DEEPLINK_ACCEPTS_UNTRUSTED_INPUT"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Media apps frequently route links into article, player, subscription, or WebView surfaces. Validate URL, host, and content parameters before release."
+      }
+    },
+    {
+      "ruleId": "media_sdk_privacy_review",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Media apps commonly use analytics, ads, streaming, and crash SDKs. They are not automatically defects, but privacy disclosures and data-safety declarations should be checked."
+      }
+    },
+    {
+      "ruleId": "media_backup_review",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For media apps, backup is usually a review item unless subscriptions, private history, identifiers, or auth tokens are in scope."
+      }
+    }
+  ]
+}

@@ -27,3 +27,4 @@ __pycache__/
 *.key
 *.log
 captures/
+.aura-guide/

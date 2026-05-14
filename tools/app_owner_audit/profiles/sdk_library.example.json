@@ -1,0 +1,13 @@
+{
+  "appCategory": "sdk_library",
+  "dataSensitivity": "medium",
+  "releaseStage": "production_candidate",
+  "distribution": "sdk_or_demo_host",
+  "authFlow": false,
+  "payments": false,
+  "webviewUsageExpected": null,
+  "externalIntegrationsExpected": true,
+  "allowedCleartextDomains": [],
+  "knownExportedComponents": [],
+  "acceptedRisks": []
+}

@@ -1,0 +1,75 @@
+{
+  "policyPackId": "banking_policy",
+  "version": "0.1.0",
+  "description": "Context rules for banking apps that handle regulated financial identity, account, payment, or transaction flows.",
+  "rules": [
+    {
+      "ruleId": "banking_exported_auth_payment_activity_blocker",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": "activity",
+        "rawContains": ["auth", "login", "payment", "transfer", "redirect", "callback", "token", "webview", "deeplink", "link"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For banking apps, exported auth, payment, transfer, redirect, WebView, or token-related activities are high-risk release blockers until caller validation, input validation, and intent/deep-link constraints are verified."
+      }
+    },
+    {
+      "ruleId": "banking_exported_service_receiver_blocker",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Banking services and receivers can trigger account, notification, sync, or payment-adjacent behavior. Unguarded exported entry points need to be fixed or explicitly justified before release."
+      }
+    },
+    {
+      "ruleId": "banking_cleartext_blocker",
+      "when": {
+        "evidenceType": "CLEARTEXT_TRAFFIC_ALLOWED"
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Banking apps should not ship broad cleartext transport. Any exception must be domain-scoped, documented, and accepted in the app profile."
+      }
+    },
+    {
+      "ruleId": "banking_backup_blocker",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P1",
+        "status": "BLOCKER",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Banking apps may store identifiers, tokens, account state, or transaction context. Backup/data extraction behavior must be explicitly restricted before production."
+      }
+    },
+    {
+      "ruleId": "banking_sdk_privacy_should_fix",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "P2",
+        "status": "SHOULD_FIX",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "Banking apps need stricter review of third-party SDKs because identifiers, telemetry, and account-context metadata can be regulated or contractually sensitive."
+      }
+    }
+  ]
+}

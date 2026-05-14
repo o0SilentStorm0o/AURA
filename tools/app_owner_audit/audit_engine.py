@@ -88,15 +88,16 @@ DEFAULT_APP_PROFILE = {
 }
 CATEGORY_POLICY_PACKS = {
     "fintech": "fintech_policy.json",
-    "banking": "fintech_policy.json",
+    "banking": "banking_policy.json",
     "health": "health_policy.json",
     "ecommerce": "ecommerce_policy.json",
-    "chat_social": "ecommerce_policy.json",
-    "media": "public_info_policy.json",
+    "chat_social": "chat_social_policy.json",
+    "media": "media_policy.json",
     "public_info": "public_info_policy.json",
-    "public_sector": "public_info_policy.json",
+    "public_sector": "public_sector_policy.json",
     "internal_enterprise": "internal_enterprise_policy.json",
     "sdk_library": "sdk_library_policy.json",
+    "utility": "utility_policy.json",
 }
 DEBUG_RELEASE_STAGES = {"debug", "development", "internal_debug"}
 

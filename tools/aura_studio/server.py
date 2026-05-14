@@ -35,6 +35,19 @@ DEFAULT_QDRANT_URL = "http://localhost:6333"
 DEFAULT_LLM_MODEL = "qwen2.5:3b"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
 DEFAULT_AURA_PACKAGE = "cz.davidstrnadel.aura.research"
+APP_PROFILE_CATEGORIES = [
+    "ecommerce",
+    "chat_social",
+    "fintech",
+    "banking",
+    "health",
+    "public_info",
+    "public_sector",
+    "media",
+    "internal_enterprise",
+    "sdk_library",
+    "utility",
+]
 
 sys.path.insert(0, str(REPO_ROOT / "tools" / "report_generator"))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "app_owner_audit"))
@@ -211,7 +224,7 @@ def health(config: StudioConfig) -> dict[str, Any]:
     }
 
 
-def profile_presets() -> dict[str, dict[str, Any]]:
+def profile_presets() -> dict[str, Any]:
     presets = {"default_ecommerce": default_profile()}
     profile_dir = REPO_ROOT / "tools" / "app_owner_audit" / "profiles"
     for path in sorted(profile_dir.glob("*.json")):
@@ -219,7 +232,7 @@ def profile_presets() -> dict[str, dict[str, Any]]:
             presets[path.stem] = load_json(path)
         except ValueError:
             continue
-    return presets
+    return {"categories": APP_PROFILE_CATEGORIES, "presets": presets}
 
 
 def create_run_dir(basename: str) -> Path:
@@ -365,7 +378,7 @@ class StudioHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/health":
                 json_response(self, health(self.config))
             elif parsed.path == "/api/profiles":
-                json_response(self, {"presets": profile_presets()})
+                json_response(self, profile_presets())
             elif parsed.path == "/api/packages":
                 params = parse_qs(parsed.query)
                 path = repo_path((params.get("exportPath") or [str(DEFAULT_EXPORT)])[0], must_exist=True)
@@ -421,7 +434,10 @@ class StudioHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, format: str, *args: Any) -> None:
-        print(f"[studio] {self.address_string()} - {format % args}")
+        try:
+            print(f"[studio] {self.address_string()} - {format % args}", file=sys.stderr)
+        except OSError:
+            pass
 
 
 def main() -> int:

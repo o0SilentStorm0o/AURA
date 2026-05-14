@@ -1,0 +1,13 @@
+{
+  "appCategory": "health",
+  "dataSensitivity": "regulated",
+  "releaseStage": "production_candidate",
+  "distribution": "google_play",
+  "authFlow": true,
+  "payments": false,
+  "webviewUsageExpected": false,
+  "externalIntegrationsExpected": true,
+  "allowedCleartextDomains": [],
+  "knownExportedComponents": [],
+  "acceptedRisks": []
+}

@@ -1,0 +1,13 @@
+{
+  "appCategory": "chat_social",
+  "dataSensitivity": "medium",
+  "releaseStage": "production_candidate",
+  "distribution": "google_play",
+  "authFlow": true,
+  "payments": false,
+  "webviewUsageExpected": true,
+  "externalIntegrationsExpected": true,
+  "allowedCleartextDomains": [],
+  "knownExportedComponents": [],
+  "acceptedRisks": []
+}

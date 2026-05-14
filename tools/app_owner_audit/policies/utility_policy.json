@@ -1,0 +1,61 @@
+{
+  "policyPackId": "utility_policy",
+  "version": "0.1.0",
+  "description": "Context rules for low-sensitivity utilities with no account, payment, or regulated-data workflow.",
+  "rules": [
+    {
+      "ruleId": "utility_exported_service_receiver_review",
+      "when": {
+        "evidenceType": "EXPORTED_COMPONENT_WITHOUT_GUARD",
+        "componentKind": ["service", "receiver"]
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For low-sensitivity utilities, exported services or receivers are usually review items unless they can change state, trigger expensive work, or interact with sensitive platform capabilities."
+      }
+    },
+    {
+      "ruleId": "utility_backup_review",
+      "when": {
+        "evidenceType": "BACKUP_MAY_INCLUDE_SENSITIVE_DATA"
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Android team",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For low-sensitivity utilities without accounts or payments, backup is usually a review item. Confirm it contains only harmless preferences or cache."
+      }
+    },
+    {
+      "ruleId": "utility_unexpected_sdk_review",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE",
+        "externalIntegrationsExpected": false
+      },
+      "effect": {
+        "priority": "P3",
+        "status": "REVIEW",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "The profile says external integrations are not expected. Third-party SDKs may still be legitimate, but should be justified and disclosed."
+      }
+    },
+    {
+      "ruleId": "utility_sdk_info",
+      "when": {
+        "evidenceType": "THIRD_PARTY_SDK_PRIVACY_SURFACE"
+      },
+      "effect": {
+        "priority": "INFO",
+        "status": "INFO",
+        "owner": "Product/security reviewer",
+        "manualReviewRequired": true,
+        "appProfileImpact": "For simple utilities, SDKs are shown mainly as privacy/disclosure context unless the profile says integrations are unexpected."
+      }
+    }
+  ]
+}

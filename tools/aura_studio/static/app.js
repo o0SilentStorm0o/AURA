@@ -1,5 +1,6 @@
 const state = {
   health: null,
+  categories: [],
   presets: {},
   lastResult: null,
 };
@@ -46,6 +47,7 @@ function currentProfile() {
 }
 
 function applyProfile(profile) {
+  ensureCategoryOption(profile.appCategory || "ecommerce");
   $("appCategory").value = profile.appCategory || "ecommerce";
   $("dataSensitivity").value = profile.dataSensitivity || "medium";
   $("releaseStage").value = profile.releaseStage || "production_candidate";
@@ -55,6 +57,23 @@ function applyProfile(profile) {
   $("externalIntegrationsExpected").checked = profile.externalIntegrationsExpected !== false;
   $("allowedCleartextDomains").value = (profile.allowedCleartextDomains || []).join(", ");
   $("knownExportedComponents").value = (profile.knownExportedComponents || []).join(", ");
+}
+
+function renderCategories(categories) {
+  const values = categories && categories.length ? categories : ["ecommerce", "public_info", "utility"];
+  state.categories = values;
+  $("appCategory").innerHTML = values
+    .map((category) => `<option value="${category}">${category}</option>`)
+    .join("");
+}
+
+function ensureCategoryOption(category) {
+  const value = String(category || "").trim();
+  if (!value) return;
+  if (!state.categories.includes(value)) {
+    state.categories.push(value);
+    $("appCategory").insertAdjacentHTML("beforeend", `<option value="${value}">${value}</option>`);
+  }
 }
 
 function statusDot(ok, warn = false) {
@@ -100,6 +119,7 @@ async function refreshHealth() {
 
 async function loadProfiles() {
   const payload = await api("/api/profiles");
+  renderCategories(payload.categories || []);
   state.presets = payload.presets || {};
   $("profilePreset").innerHTML = Object.keys(state.presets)
     .map((key) => `<option value="${key}">${key}</option>`)
